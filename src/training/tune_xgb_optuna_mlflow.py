@@ -18,6 +18,7 @@ import numpy as np
 import optuna
 import pandas as pd
 import joblib
+import json
 
 from sklearn.metrics import (
     mean_absolute_error,
@@ -319,7 +320,7 @@ def save_model(
 
     output_dir = Path(output_dir)
 
-    model_path = output_dir / "best_xgboost_model.pkl"
+    model_path = output_dir / "best_xgb.pkl"
 
     joblib.dump(
         model,
@@ -382,8 +383,18 @@ def run_tuning_pipeline(
         y_test,
     )
 
+    with open(
+        MODEL_DIR / "best_params_xgb.json",
+        "w",
+    ) as f:
+        json.dump(
+            study.best_params,
+            f,
+            indent=4,
+        )
+
     with mlflow.start_run(
-        run_name="best_xgboost_model"
+        run_name="best_xgb"
     ):
 
         mlflow.log_params(
