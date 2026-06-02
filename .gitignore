@@ -1,4 +1,6 @@
-data/
+data/features
+data/processed
+data/raw
 mlruns/
 .venv
 __pycache__
