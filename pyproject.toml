@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+ 
+# ---------------------------------------------------------------------------
+# Project metadata
+# ---------------------------------------------------------------------------
+[project]
+name = "nasa-rul-mle"
+version = "0.1.0"
+description = "Remaining Useful Life (RUL) prediction on NASA Turbofan dataset"
+readme = "README.md"
+requires-python = ">=3.13"
+ 
+# Core runtime dependencies — pinned to match your trained model environment
+dependencies = [
+    "numpy==2.4.4",
+    "pandas==2.3.3",
+    "scikit-learn==1.8.0",
+    "xgboost==3.2.0",
+    "torch==2.11.0",
+    "mlflow==3.11.1",
+    "scipy==1.17.1",
+    "pyarrow==23.0.1",
+    "cloudpickle==3.1.2",
+    "psutil==7.2.2",
+    "tqdm==4.67.3",
+    # FastAPI serving
+    "fastapi==0.115.12",
+    "uvicorn[standard]==0.34.3",
+    "pydantic==2.11.4",
+]
+ 
+# ---------------------------------------------------------------------------
+# Optional dependency groups
+# ---------------------------------------------------------------------------
+[project.optional-dependencies]
+ 
+# Install with:  pip install -e ".[dev]"
+dev = [
+    "pytest==8.3.5",
+    "pytest-cov==6.1.0",
+    "httpx==0.28.1",          # used by FastAPI TestClient
+    "ruff==0.11.8",           # linter + formatter
+    "mypy==1.15.0",           # type checker
+    "pre-commit==4.2.0",
+]
+ 
+# Install with:  pip install -e ".[notebook]"
+notebook = [
+    "jupyter==1.1.1",
+    "ipykernel==6.29.5",
+    "matplotlib==3.10.3",
+    "seaborn==0.13.2",
+    "optuna==4.3.0",
+    "optuna-dashboard==0.18.0",
+]
