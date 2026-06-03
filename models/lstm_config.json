@@ -1,0 +1,5 @@
+{
+    "seq_len": 41,
+    "hidden_size": 64,
+    "num_layers": 3
+}
