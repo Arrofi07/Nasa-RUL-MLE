@@ -369,6 +369,8 @@ def run_tuning_pipeline(
         n_trials=n_trials,
     )
 
+    print("jumlah features train: ", len(X_train))
+
     final_model = train_final_model(
         study,
         X_train,

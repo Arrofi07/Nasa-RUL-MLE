@@ -24,20 +24,34 @@ from src.inference.pipeline import InferencePipeline
 # ---------------------------------------------------------------------------
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int = 64, num_layers: int = 2):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int = 64,
+        num_layers: int = 2,
+        dropout: float = 0.2,
+    ):
         super().__init__()
+        lstm_dropout = dropout if num_layers > 1 else 0.0
         self.lstm = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True,
+            dropout=lstm_dropout,
         )
-        self.fc = nn.Linear(hidden_size, 1)
+        self.head = nn.Sequential(
+            nn.LayerNorm(hidden_size),       # works on any batch size, including 1
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size // 2, 1),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out, _ = self.lstm(x)
         out = out[:, -1, :]
-        return self.fc(out).squeeze(-1)
+        return self.head(out).squeeze(-1)
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +98,13 @@ class ModelRegistry:
         Missing LSTM weights → lstm stays None (XGBoost-only mode).
         Missing XGBoost pickle → raises FileNotFoundError immediately.
         """
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # MPS (Apple Silicon GPU) is intentionally skipped — it segfaults at
+        # torch.load() time on several macOS + PyTorch 2.x combinations.
+        # CPU inference is fast enough for this model size.
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
 
         # --- XGBoost (required) ---
         xgb_path = Path(xgb_path)
@@ -117,11 +137,28 @@ class ModelRegistry:
                 input_size=n_features,
                 hidden_size=lstm_config["hidden_size"],
                 num_layers=lstm_config["num_layers"],
+                dropout=lstm_config.get("dropout", 0.2),
             ).to(device)
             lstm_model.load_state_dict(
                 torch.load(lstm_path, map_location=device, weights_only=True)
             )
             lstm_model.eval()
+
+            #print("=== MODEL FEATURES ===")
+            #print(list(xgb_model.feature_names_in_))
+
+            #print("=== PIPELINE FEATURES ===")
+            #print(pipeline.feature_cols)
+
+            #print(
+            #    "Missing from pipeline:",
+            #    set(xgb_model.feature_names_in_) - set(pipeline.feature_cols)
+            #)
+
+            #print(
+            #    "Extra in pipeline:",
+            #    set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
+            #)
 
         return cls(xgb_model, lstm_model, pipeline, lstm_config, device)
 
@@ -149,6 +186,7 @@ class ModelRegistry:
         We recommend sending at least 5 cycles (rolling_window size).
         """
         X = self.pipe.transform_xgb(readings)
+
         pred = float(self.xgb.predict(X)[0])
         # Clip to [0, 125] — matches the RUL cap used during training
         return max(0.0, min(pred, 125.0))

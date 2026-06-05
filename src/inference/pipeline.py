@@ -26,10 +26,10 @@ from pathlib import Path
 
 
 # Sensors dropped in preprocess.py
-_DROP_SENSORS = [
+"""_DROP_SENSORS = [
     "sensor_1", "sensor_5", "sensor_10",
     "sensor_16", "sensor_18", "sensor_19",
-]
+]"""
 
 # The columns the feature pipeline keeps, in the exact order XGBoost expects.
 # This list is written to disk by export_artifacts.py after training.
@@ -82,9 +82,9 @@ class InferencePipeline:
         """Convert a list of sensor dicts into a DataFrame."""
         return pd.DataFrame(readings)
 
-    def _drop_sensors(self, df: pd.DataFrame) -> pd.DataFrame:
+    """def _drop_sensors(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = [c for c in _DROP_SENSORS if c in df.columns]
-        return df.drop(columns=cols)
+        return df.drop(columns=cols)"""
 
     def _apply_preprocess_scaler(self, df: pd.DataFrame) -> pd.DataFrame:
         """Normalise with the scaler fitted during preprocess.py."""
@@ -155,6 +155,13 @@ class InferencePipeline:
 
         # Return only the columns the model was trained on, in the right order
         available = [c for c in self.feature_cols if c in df.columns]
+
+        #print("Expected feature count:", len(self.feature_cols))
+        #print("Actual feature count:", len(df.columns))
+
+        #missing = set(self.feature_cols) - set(df.columns)
+        #print("Missing:", missing)
+
         return df[available]
 
     # ------------------------------------------------------------------
@@ -170,9 +177,11 @@ class InferencePipeline:
         training test set takes the last cycle of each engine).
         """
         df = self._to_dataframe(readings)
-        df = self._drop_sensors(df)
+        #df = self._drop_sensors(df)
         df = self._apply_preprocess_scaler(df)
         X = self._build_feature_matrix(df)
+
+        X.insert(0, "cycle", df["cycle"].iloc[-1])
 
         # XGBoost predicts on the final cycle row
         return X.iloc[[-1]].values
@@ -185,7 +194,7 @@ class InferencePipeline:
         Zero-pads the front if fewer than seq_len cycles are provided.
         """
         df = self._to_dataframe(readings)
-        df = self._drop_sensors(df)
+        #df = self._drop_sensors(df)
         df = self._apply_preprocess_scaler(df)
         X = self._build_feature_matrix(df)  # shape (n_cycles, n_features)
 
