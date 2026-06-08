@@ -247,12 +247,11 @@ class TestBuildFeaturesIntegration:
 class TestCreateSequences:
 
     def test_output_shapes(self, feature_train_df, feat_cols):
+        from conftest import N_ENGINES, N_CYCLES
         seq_len = 10
         X, y = create_sequences(feature_train_df, seq_len, feat_cols)
-        # Each engine has 40 cycles → 40 - seq_len = 30 sequences per engine
-        # 4 engines → 120 sequences
-        expected_seqs = 4 * (40 - seq_len)
-        assert X.shape == (expected_seqs, seq_len, len(feat_cols))
+        expected_seqs = N_ENGINES * (N_CYCLES - seq_len)
+        assert X.shape == (expected_seqs, seq_len, len(feat_cols)),             f"Expected ({expected_seqs}, {seq_len}, {len(feat_cols)}), got {X.shape}"
         assert y.shape == (expected_seqs,)
 
     def test_seq_len_larger_than_engine_produces_no_sequence(self, feat_cols):

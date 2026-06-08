@@ -43,14 +43,14 @@ st.set_page_config(page_title="NASA Turbofan RUL", page_icon="✈️", layout="w
 
 @st.cache_data
 def load_test_data():
-    fe  = pd.read_csv(f"{PROCESSED_DIR}/feature_engineered_test2.csv")
-    rul = pd.read_csv(f"{PROCESSED_DIR}/rul_clean2.csv")
+    fe  = pd.read_csv(f"{PROCESSED_DIR}/feature_engineered_test.csv")
+    rul = pd.read_csv(f"{PROCESSED_DIR}/rul_clean.csv")
     rul.columns = ["rul"]
 
     # IMPORTANT: load the UNSCALED raw test file (output of load.py, before
     # preprocess.py applies StandardScaler). The API pipeline applies scaling
     # internally — sending test_clean.csv would double-scale and corrupt predictions.
-    raw = pd.read_csv("data/raw/test2.csv")
+    raw = pd.read_csv("data/raw/test.csv")
 
     return fe, rul, raw
 

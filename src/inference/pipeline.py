@@ -25,11 +25,8 @@ import pandas as pd
 from pathlib import Path
 
 
-# Sensors dropped in preprocess.py
-"""_DROP_SENSORS = [
-    "sensor_1", "sensor_5", "sensor_10",
-    "sensor_16", "sensor_18", "sensor_19",
-]"""
+# No hardcoded sensor drop list — the pipeline derives the correct
+# columns from the preprocess scaler's feature_names_in_ attribute.
 
 # The columns the feature pipeline keeps, in the exact order XGBoost expects.
 # This list is written to disk by export_artifacts.py after training.
@@ -82,9 +79,12 @@ class InferencePipeline:
         """Convert a list of sensor dicts into a DataFrame."""
         return pd.DataFrame(readings)
 
-    """def _drop_sensors(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = [c for c in _DROP_SENSORS if c in df.columns]
-        return df.drop(columns=cols)"""
+    def _align_to_scaler(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Keep only columns the preprocess scaler was fitted on + meta cols."""
+        meta = ["engine_id", "cycle"]
+        scaler_cols = list(self._preprocess_cols)
+        keep = meta + [c for c in scaler_cols if c in df.columns]
+        return df[[c for c in keep if c in df.columns]]
 
     def _apply_preprocess_scaler(self, df: pd.DataFrame) -> pd.DataFrame:
         """Normalise with the scaler fitted during preprocess.py."""
@@ -155,13 +155,6 @@ class InferencePipeline:
 
         # Return only the columns the model was trained on, in the right order
         available = [c for c in self.feature_cols if c in df.columns]
-
-        #print("Expected feature count:", len(self.feature_cols))
-        #print("Actual feature count:", len(df.columns))
-
-        #missing = set(self.feature_cols) - set(df.columns)
-        #print("Missing:", missing)
-
         return df[available]
 
     # ------------------------------------------------------------------
@@ -177,7 +170,7 @@ class InferencePipeline:
         training test set takes the last cycle of each engine).
         """
         df = self._to_dataframe(readings)
-        #df = self._drop_sensors(df)
+        df = self._align_to_scaler(df)
         df = self._apply_preprocess_scaler(df)
         X = self._build_feature_matrix(df)
 
@@ -194,7 +187,7 @@ class InferencePipeline:
         Zero-pads the front if fewer than seq_len cycles are provided.
         """
         df = self._to_dataframe(readings)
-        #df = self._drop_sensors(df)
+        df = self._align_to_scaler(df)
         df = self._apply_preprocess_scaler(df)
         X = self._build_feature_matrix(df)  # shape (n_cycles, n_features)
 

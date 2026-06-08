@@ -293,6 +293,21 @@ pip install -e ".[dev]"
 
 ## Common Commands
 
+### Testing
+```bash
+# Run all tests
+PYTHONPATH=. pytest tests/ -v
+
+# With coverage:
+PYTHONPATH=. pytest tests/ -v --cov=src --cov-report=term-missing
+
+# Run specific test modules  
+PYTHONPATH=. pytest tests/conftest.py
+PYTHONPATH=. pytest tests/test_data_quality.py
+PYTHONPATH=. pytest tests/test_features.py
+PYTHONPATH=. pytest tests/test_training.py
+PYTHONPATH=. pytest tests/test_inference.py
+
 ### Data Pipeline
 
 ```bash
@@ -329,6 +344,14 @@ python main.py
 # Or directly
 uvicorn src.api.app:app --reload --port 8000
 ```
+
+### Start Dashboard
+# Terminal 1 — keep this running
+python main.py
+
+# Terminal 2
+streamlit run app.py
+# Opens: http://localhost:8501
 
 ### MLflow UI
 

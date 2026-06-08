@@ -16,7 +16,6 @@ import pytest
 
 from src.data.load import load_and_preprocess_data
 from src.data.preprocess import (
-    drop_unused_sensors,
     normalize_features,
     preprocess_data,
     remove_constant_features,
@@ -28,7 +27,6 @@ EXPECTED_COLS = (
     + [f"sensor_{i}" for i in range(1, 22)]
 )
 
-DROPPED_SENSORS = ["sensor_1", "sensor_5", "sensor_10", "sensor_16", "sensor_18", "sensor_19"]
 
 
 # ===========================================================================
@@ -143,7 +141,8 @@ class TestLoadAndPreprocessData:
         assert pd.api.types.is_integer_dtype(train["engine_id"]), "engine_id should be integer"
 
     def test_row_count_preserved(self, raw_dir, tmp_path):
-        """Row count in train output == sum of cycles across all engines."""
+        """Row count in train output == n_engines × cycles_per_engine."""
+        from conftest import N_ENGINES, N_CYCLES
         out = tmp_path / "out"
         train, _, _ = load_and_preprocess_data(
             train_path=str(raw_dir / "train_FD001.txt"),
@@ -151,38 +150,13 @@ class TestLoadAndPreprocessData:
             rul_path=str(raw_dir   / "RUL_FD001.txt"),
             output_dir=out,
         )
-        # 5 engines × 30 cycles = 150
-        assert len(train) == 150
+        expected_rows = N_ENGINES * N_CYCLES
+        assert len(train) == expected_rows,             f"Expected {expected_rows} rows, got {len(train)}"
 
 
 # ===========================================================================
 # preprocess.py unit tests
 # ===========================================================================
-
-
-class TestDropUnusedSensors:
-
-    def test_drops_known_sensors(self, raw_train_df):
-        result = drop_unused_sensors(raw_train_df)
-        for s in DROPPED_SENSORS:
-            assert s not in result.columns, f"{s} should have been dropped"
-
-    def test_retains_other_sensors(self, raw_train_df):
-        result = drop_unused_sensors(raw_train_df)
-        kept = [f"sensor_{i}" for i in range(1, 22) if f"sensor_{i}" not in DROPPED_SENSORS]
-        for s in kept:
-            assert s in result.columns, f"{s} should still be present"
-
-    def test_does_not_drop_meta_columns(self, raw_train_df):
-        result = drop_unused_sensors(raw_train_df)
-        for col in ["engine_id", "cycle"]:
-            assert col in result.columns
-
-    def test_idempotent(self, raw_train_df):
-        """Calling drop_unused_sensors twice gives same result as once."""
-        once  = drop_unused_sensors(raw_train_df.copy())
-        twice = drop_unused_sensors(once.copy())
-        pd.testing.assert_frame_equal(once, twice)
 
 
 class TestRemoveConstantFeatures:
@@ -209,31 +183,21 @@ class TestRemoveConstantFeatures:
 class TestNormalizeFeatures:
 
     def test_train_mean_near_zero(self, raw_train_df, raw_test_df):
-        train = drop_unused_sensors(raw_train_df.copy())
-        test  = drop_unused_sensors(raw_test_df.copy())
-        train_norm, _ = normalize_features(train, test)
+        train_norm, _ = normalize_features(raw_train_df.copy(), raw_test_df.copy())
         feature_cols = [c for c in train_norm.columns if c not in ["engine_id", "cycle", "rul"]]
         means = train_norm[feature_cols].mean().abs()
         assert (means < 0.1).all(), "Train feature means should be ~0 after normalization"
 
     def test_train_std_near_one(self, raw_train_df, raw_test_df):
-        train = drop_unused_sensors(raw_train_df.copy())
-        test  = drop_unused_sensors(raw_test_df.copy())
-        train_norm, _ = normalize_features(train, test)
+        train_norm, _ = normalize_features(raw_train_df.copy(), raw_test_df.copy())
         feature_cols = [c for c in train_norm.columns if c not in ["engine_id", "cycle", "rul"]]
         stds = train_norm[feature_cols].std()
         assert ((stds - 1.0).abs() < 0.1).all(), "Train feature stds should be ~1 after normalization"
 
     def test_no_leakage_from_test(self, raw_train_df, raw_test_df):
         """Test scaler is fitted on train only — same train data → same result."""
-        train1 = drop_unused_sensors(raw_train_df.copy())
-        test1  = drop_unused_sensors(raw_test_df.copy())
-        train2 = drop_unused_sensors(raw_train_df.copy())
-        test2  = drop_unused_sensors(raw_test_df.copy())
-
-        train_norm1, _ = normalize_features(train1, test1)
-        train_norm2, _ = normalize_features(train2, test2)
-
+        train_norm1, _ = normalize_features(raw_train_df.copy(), raw_test_df.copy())
+        train_norm2, _ = normalize_features(raw_train_df.copy(), raw_test_df.copy())
         feature_cols = [c for c in train_norm1.columns if c not in ["engine_id", "cycle", "rul"]]
         pd.testing.assert_frame_equal(
             train_norm1[feature_cols].round(8),
@@ -241,10 +205,8 @@ class TestNormalizeFeatures:
         )
 
     def test_meta_columns_unchanged(self, raw_train_df, raw_test_df):
-        train = drop_unused_sensors(raw_train_df.copy())
-        test  = drop_unused_sensors(raw_test_df.copy())
-        original_engine_ids = train["engine_id"].values.copy()
-        train_norm, _ = normalize_features(train, test)
+        original_engine_ids = raw_train_df["engine_id"].values.copy()
+        train_norm, _ = normalize_features(raw_train_df.copy(), raw_test_df.copy())
         np.testing.assert_array_equal(train_norm["engine_id"].values, original_engine_ids)
 
 
@@ -260,10 +222,12 @@ class TestPreprocessDataIntegration:
         assert (processed_dir / "test_clean.csv").exists()
         assert (processed_dir / "rul_clean.csv").exists()
 
-    def test_dropped_sensors_absent(self, processed_dir):
+    def test_constant_columns_absent(self, processed_dir):
+        """Preprocessing must remove zero-variance columns from train."""
         train = pd.read_csv(processed_dir / "train_clean.csv")
-        for s in DROPPED_SENSORS:
-            assert s not in train.columns
+        feature_cols = [c for c in train.columns if c not in ["engine_id", "cycle", "rul"]]
+        for col in feature_cols:
+            assert train[col].nunique() > 1, f"{col} is constant — should have been dropped"
 
     def test_no_missing_values(self, processed_dir):
         train = pd.read_csv(processed_dir / "train_clean.csv")

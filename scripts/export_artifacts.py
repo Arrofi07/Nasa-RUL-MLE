@@ -34,7 +34,7 @@ import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from src.data.preprocess import drop_unused_sensors
+
 from src.features.build_feature import select_features
 
 # ---------------------------------------------------------------------------
@@ -55,8 +55,7 @@ print("📦 Fitting preprocess scaler …")
 
 train_raw = pd.read_csv(RAW_DIR / "train.csv")
 
-# Mirror preprocess.py exactly
-train_raw = drop_unused_sensors(train_raw)
+
 
 # Remove constant columns (same logic as remove_constant_features)
 nunique = train_raw.nunique()
