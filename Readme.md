@@ -386,6 +386,10 @@ mlflow ui
 git add .
 git commit -m "prepare railway deployment"
 git push origin main
+
+# Deployed with Railway at root https://nasa-rul-mle-production.up.railway.app
+# Health https://nasa-rul-mle-production.up.railway.app/health 
+# Swagger UI https://nasa-rul-mle-production.up.railway.app/docs 
 ```
 
 ---
@@ -399,5 +403,5 @@ git push origin main
 - [x] LSTM training with Optuna + MLflow
 - [x] FastAPI inference API
 - [x] Unit and integration tests
-- [ ] Dockerfile and container deployment
+- [x] Dockerfile and container deployment
 - [ ] CI/CD with GitHub Actions
