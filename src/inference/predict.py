@@ -144,21 +144,21 @@ class ModelRegistry:
             )
             lstm_model.eval()
 
-            print("=== MODEL FEATURES ===")
-            print(list(xgb_model.feature_names_in_))
+            #print("=== MODEL FEATURES ===")
+            #print(list(xgb_model.feature_names_in_))
 
-            print("=== PIPELINE FEATURES ===")
-            print(pipeline.feature_cols)
+            #print("=== PIPELINE FEATURES ===")
+            #print(pipeline.feature_cols)
 
-            print(
-                "Missing from pipeline:",
-                set(xgb_model.feature_names_in_) - set(pipeline.feature_cols)
-            )
+            #print(
+            #    "Missing from pipeline:",
+            #    set(xgb_model.feature_names_in_) - set(pipeline.feature_cols)
+            #)
 
-            print(
-                "Extra in pipeline:",
-                set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
-            )
+            #print(
+            #    "Extra in pipeline:",
+            #    set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
+            #)
 
         return cls(xgb_model, lstm_model, pipeline, lstm_config, device)
 

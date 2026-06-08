@@ -88,8 +88,11 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     joblib.dump(feat_scaler, tmp_path / "feature_scaler.pkl")
 
     # ── XGBoost model ────────────────────────────────────────────────────
-    X_train = fe_train[full_feat_cols].values
-    y_train = fe_train["rul"].values
+    # XGBoost is trained with cycle as the FIRST column (matching pipeline.py
+    # which does X.insert(0, "cycle", ...) before returning to the model).
+    xgb_cols = ["cycle"] + full_feat_cols
+    X_train  = fe_train[xgb_cols].values
+    y_train  = fe_train["rul"].values
     xgb = XGBRegressor(n_estimators=10, max_depth=2, random_state=0)
     xgb.fit(X_train, y_train)
     joblib.dump(xgb, tmp_path / "best_xgb.pkl")
@@ -146,7 +149,8 @@ class TestInferencePipelineTransforms:
     def test_transform_xgb_shape(self, mock_pipeline):
         readings = [_sensor_row(cycle=c) for c in range(1, 8)]
         X = mock_pipeline.transform_xgb(readings)
-        n_feat = len(mock_pipeline.feature_cols)
+        # XGBoost uses feature_cols + cycle prepended = n_feat + 1
+        n_feat = len(mock_pipeline.feature_cols) + 1
         assert X.shape == (1, n_feat), f"Expected (1, {n_feat}), got {X.shape}"
 
     def test_transform_lstm_shape_enough_cycles(self, mock_pipeline):
@@ -283,22 +287,45 @@ class TestFastAPIEndpoints:
 class TestDoubleScalingRegression:
     """
     Guard against the bug where already-scaled data is passed to the API
-    pipeline which then scales it again, compressing predictions toward the mean.
+    pipeline which then scales it again, compressing all feature values
+    toward zero (double-scaling).
+
+    We test this at the pipeline transform level — not at the XGBoost
+    prediction level — because a tiny test model trained on random data
+    may not be sensitive to feature scale (cycle dominates). The transform
+    output is always sensitive: raw sensor values (~400-700) vs near-zero
+    (~0.0004-0.0007) produce completely different scaled feature vectors.
     """
 
-    def test_scaled_input_differs_from_raw_input(self, registry):
+    def test_pipeline_transform_differs_for_raw_vs_scaled_input(self, artifacts):
+        """Raw sensor values and pre-scaled (~zero) values must produce
+        different feature vectors after pipeline transformation."""
+        from src.inference.pipeline import InferencePipeline
+
+        pipeline = InferencePipeline(
+            preprocess_scaler_path=artifacts / "preprocess_scaler.pkl",
+            feature_scaler_path=artifacts / "feature_scaler.pkl",
+            feature_cols_path=artifacts / "feature_cols.txt",
+            rolling_window=3,
+            seq_len=SEQ_LEN,
+        )
+
         raw_reading = _sensor_row(cycle=50)
 
-        # Simulate pre-scaled input (values near zero, typical after StandardScaler)
-        scaled_reading = {**raw_reading}
-        for k in scaled_reading:
-            if k.startswith("sensor_") or k.startswith("setting_"):
-                scaled_reading[k] *= 0.001   # collapse to near-zero
+        # Pre-scaled input: sensor values collapsed to near-zero
+        # (what StandardScaler output looks like — ~[-3, 3] range,
+        # not ~[400, 700] like raw FD001 sensor readings)
+        scaled_reading = {
+            k: (v * 0.001 if k.startswith("sensor_") or k.startswith("setting_") else v)
+            for k, v in raw_reading.items()
+        }
 
-        pred_raw    = registry.predict_xgb([raw_reading])
-        pred_scaled = registry.predict_xgb([scaled_reading])
+        X_raw    = pipeline.transform_xgb([raw_reading])
+        X_scaled = pipeline.transform_xgb([scaled_reading])
 
-        assert pred_raw != pytest.approx(pred_scaled, rel=0.05), (
-            "Raw and pre-scaled inputs produced identical predictions — "
-            "pipeline may not be sensitive to input scale."
+        # The two feature vectors must differ significantly
+        max_diff = float(np.abs(X_raw - X_scaled).max())
+        assert max_diff > 0.1, (
+            f"Raw and pre-scaled inputs produced nearly identical feature vectors "
+            f"(max diff={max_diff:.6f}). Pipeline may not be applying the scaler."
         )

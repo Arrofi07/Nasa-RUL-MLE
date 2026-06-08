@@ -30,7 +30,7 @@ from pathlib import Path
 
 # The columns the feature pipeline keeps, in the exact order XGBoost expects.
 # This list is written to disk by export_artifacts.py after training.
-_FEATURE_COLS_FILE = "models/feature_cols.txt"
+#_FEATURE_COLS_FILE = "models/feature_cols.txt"
 
 
 def _load_feature_cols(feature_cols_path: str | Path) -> list[str]:
