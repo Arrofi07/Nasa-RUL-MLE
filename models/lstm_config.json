@@ -1,5 +1,6 @@
 {
-    "seq_len": 41,
-    "hidden_size": 64,
-    "num_layers": 3
+    "seq_len": 42,
+    "hidden_size": 128,
+    "num_layers": 1,
+    "dropout": 0.14816253929554624
 }

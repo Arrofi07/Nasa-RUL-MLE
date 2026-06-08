@@ -1,0 +1,7 @@
+services:
+  nasa-rul-api:
+    build: .
+    container_name: nasa-rul-api
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

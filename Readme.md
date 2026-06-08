@@ -353,11 +353,39 @@ python main.py
 streamlit run app.py
 # Opens: http://localhost:8501
 
+### Docker
+```bash
+# Build API container
+docker build -t nasa-rul-api .
+
+# Build Streamlit container  
+docker build -t housing-streamlit -f Dockerfile.streamlit .
+
+# Run API container
+docker run -p 8000:8000 nasa-rul-api
+
+# Test
+curl http://localhost:8000/health
+
+# Run Streamlit container
+docker run -p 8501:8501 nasa-rul-api
+
+# Docker compose
+docker compose up -d
+```
+
 ### MLflow UI
 
 ```bash
 mlflow ui
 # Open: http://localhost:5000
+```
+
+### Deploy to Railway
+```bash
+git add .
+git commit -m "prepare railway deployment"
+git push origin main
 ```
 
 ---
@@ -370,6 +398,6 @@ mlflow ui
 - [x] XGBoost tuning with Optuna + MLflow
 - [x] LSTM training with Optuna + MLflow
 - [x] FastAPI inference API
-- [ ] Unit and integration tests
+- [x] Unit and integration tests
 - [ ] Dockerfile and container deployment
 - [ ] CI/CD with GitHub Actions
