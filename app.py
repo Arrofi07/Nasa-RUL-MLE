@@ -28,7 +28,11 @@ import streamlit as st
 # Config
 # ---------------------------------------------------------------------------
 
-API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
+#API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
+API_URL = os.environ.get(
+    "API_URL",
+    "https://nasa-rul-mle-production.up.railway.app"
+)
 PROCESSED_DIR = "data/processed"
 
 #DROPPED_SENSORS = {"sensor_1", "sensor_5", "sensor_10", "sensor_16", "sensor_18", "sensor_19"}

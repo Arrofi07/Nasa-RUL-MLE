@@ -4,3 +4,4 @@ data/raw
 mlruns/
 .venv
 __pycache__
+.DS_Store
