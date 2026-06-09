@@ -358,17 +358,11 @@ streamlit run app.py
 # Build API container
 docker build -t nasa-rul-api .
 
-# Build Streamlit container  
-docker build -t housing-streamlit -f Dockerfile.streamlit .
-
 # Run API container
 docker run -p 8000:8000 nasa-rul-api
 
 # Test
 curl http://localhost:8000/health
-
-# Run Streamlit container
-docker run -p 8501:8501 nasa-rul-api
 
 # Docker compose
 docker compose up -d
@@ -390,6 +384,12 @@ git push origin main
 # Deployed with Railway at root https://nasa-rul-mle-production.up.railway.app
 # Health https://nasa-rul-mle-production.up.railway.app/health 
 # Swagger UI https://nasa-rul-mle-production.up.railway.app/docs 
+```
+
+### Deploy App with Streamlit
+```
+# Dashboard
+https://nasa-rul-dashboard.streamlit.app
 ```
 
 ---
