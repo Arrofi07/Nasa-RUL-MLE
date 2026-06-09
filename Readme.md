@@ -392,6 +392,10 @@ git push origin main
 https://nasa-rul-dashboard.streamlit.app
 ```
 
+# NASA Turbofan RUL Prediction
+
+![CI](https://github.com/Arrofi07/NASA-RUL-MLE/actions/workflows/ci.yml/badge.svg)
+
 ---
 
 ## Development Roadmap

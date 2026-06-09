@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 name = "nasa-rul-mle"
 version = "0.1.0"
 description = "Remaining Useful Life (RUL) prediction on NASA Turbofan dataset"
-readme = "README.md"
+readme = "Readme.md"
 requires-python = ">=3.13"
  
 # Core runtime dependencies — pinned to match your trained model environment
