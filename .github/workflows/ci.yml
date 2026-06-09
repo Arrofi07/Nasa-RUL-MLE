@@ -67,9 +67,10 @@ jobs:
             echo "black not installed, skipping."
           fi
 
-      - name: Run pytest
-        run: |
-          uv run pytest -v
+      - name: Run tests
+        env:
+            PYTHONPATH: ${{ github.workspace }}
+        run: uv run pytest -v
 
       - name: Build Docker image
         run: |

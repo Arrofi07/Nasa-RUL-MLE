@@ -1,5 +1,7 @@
 __pycache__/
-data/
+data/features
+data/processed
+data/raw
 notebooks/
 .ruff_cache/
 .coverage
