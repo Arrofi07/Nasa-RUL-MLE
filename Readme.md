@@ -398,6 +398,95 @@ https://nasa-rul-dashboard.streamlit.app
 
 ---
 
+# CI/CD Pipeline
+
+This project follows a Continuous Integration and Continuous Deployment (CI/CD) workflow to ensure code quality and reliable production deployments.
+
+## Continuous Integration (GitHub Actions)
+
+Every push and pull request automatically triggers a CI pipeline that performs:
+
+* Dependency installation using **uv**
+* Code quality checks (Ruff/Black, if configured)
+* Automated unit and integration tests using **pytest**
+* Docker image build verification
+
+If any step fails, the workflow stops and the changes are not considered production-ready.
+
+```
+Developer
+      │
+      ▼
+git push
+      │
+      ▼
+GitHub Actions
+      ├── Install dependencies
+      ├── Run tests
+      ├── Verify Docker build
+      └── Report status
+```
+
+---
+
+## Continuous Deployment (Railway)
+
+The repository is connected directly to Railway through GitHub Integration.
+
+Whenever new changes are pushed to the deployment branch:
+
+1. Railway automatically detects the new commit.
+2. A new Docker image is built.
+3. The application is deployed.
+4. Railway performs health checks to ensure the service is running correctly.
+
+```
+GitHub Repository
+        │
+        ▼
+Railway
+        │
+        ▼
+Docker Build
+        │
+        ▼
+Deployment
+        │
+        ▼
+Health Check
+        │
+        ▼
+Production
+```
+
+---
+
+## Production Architecture
+
+```
+                 User
+                    │
+                    ▼
+          Streamlit Dashboard
+                    │
+             REST API Request
+                    │
+                    ▼
+        FastAPI Prediction Service
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+        ▼                       ▼
+    XGBoost Model          LSTM Model
+                    │
+                    ▼
+           Remaining Useful Life
+               (RUL Prediction)
+```
+
+This architecture separates the frontend from the inference service, making the system modular, scalable, and easier to maintain.
+
+
 ## Development Roadmap
 
 - [x] Data loading and preprocessing pipeline
