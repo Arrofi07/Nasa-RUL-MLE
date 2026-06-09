@@ -1,22 +1,17 @@
 __pycache__/
 data/
 notebooks/
-.pytest_cache/
 .ruff_cache/
 .coverage
 htmlcov/
-
 .venv/
-
+.pytest_cache/
 mlruns/
-
+Nasa RUL MLE.zip
+.DS_Store
 *.pyc
 *.pyo
-
-.DS_Store
-
 .env
-
 .streamlit/secrets.toml
 
 models/*.pt
