@@ -26,6 +26,8 @@ Two environment variables are set before anything imports torch:
 """
 
 import os
+import multiprocessing
+import uvicorn
 
 # Must be set BEFORE torch is imported anywhere
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
@@ -33,17 +35,16 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-import multiprocessing
-multiprocessing.set_start_method("spawn", force=True)
-
-import uvicorn
+if __name__ == "__main__":
+    multiprocessing.set_start_method("spawn", force=True)
+    uvicorn.run(...)
 
 if __name__ == "__main__":
     uvicorn.run(
         "src.api.app:app",
         host="0.0.0.0",
         port=8000,
-        reload=False,      # never enable reload — fork+PyTorch segfaults on macOS
-        workers=1,         # single worker avoids any inter-process torch issues
+        reload=False,  # never enable reload — fork+PyTorch segfaults on macOS
+        workers=1,  # single worker avoids any inter-process torch issues
         log_level="info",
     )

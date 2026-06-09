@@ -51,8 +51,26 @@ jobs:
 
       - name: Ruff
         run: |
-          ruff check .
+          if uv run python -c "import importlib.util; exit(0 if importlib.util.find_spec('ruff') else 1)"
+          then
+            uv run ruff check .
+          else
+            echo "ruff not installed, skipping."
+          fi
 
-      - name: Run tests
+      - name: Black
         run: |
-          pytest -v
+          if uv run python -c "import importlib.util; exit(0 if importlib.util.find_spec('black') else 1)"
+          then
+            uv run black --check .
+          else
+            echo "black not installed, skipping."
+          fi
+
+      - name: Run pytest
+        run: |
+          uv run pytest -v
+
+      - name: Build Docker image
+        run: |
+          docker build -t nasa-rul-api .

@@ -25,7 +25,7 @@ from pathlib import Path
 # torch is NOT imported at module level — importing it during pytest collection
 # triggers MPS/OpenMP on macOS and causes a segfault.
 
-N_FEAT  = 6    # base sensor columns used in mock_pipeline fixture only
+N_FEAT = 6  # base sensor columns used in mock_pipeline fixture only
 SEQ_LEN = 5
 
 
@@ -33,24 +33,43 @@ SEQ_LEN = 5
 # Sensor reading helper
 # ---------------------------------------------------------------------------
 
+
 def _sensor_row(engine_id=1, cycle=1) -> dict:
     """Valid SensorReading dict with realistic FD001 values."""
     return {
-        "engine_id": engine_id, "cycle": cycle,
-        "setting_1": -0.0007, "setting_2": -0.0004, "setting_3": 100.0,
-        "sensor_1":  518.67,  "sensor_2":  641.82,  "sensor_3":  1589.70,
-        "sensor_4":  1400.60, "sensor_5":  14.62,   "sensor_6":  21.61,
-        "sensor_7":  554.36,  "sensor_8":  2388.02, "sensor_9":  9046.19,
-        "sensor_10": 1.30,    "sensor_11": 47.47,   "sensor_12": 521.66,
-        "sensor_13": 2388.02, "sensor_14": 8138.62, "sensor_15": 8.4195,
-        "sensor_16": 0.03,    "sensor_17": 392.0,   "sensor_18": 2388.0,
-        "sensor_19": 100.0,   "sensor_20": 39.06,   "sensor_21": 23.419,
+        "engine_id": engine_id,
+        "cycle": cycle,
+        "setting_1": -0.0007,
+        "setting_2": -0.0004,
+        "setting_3": 100.0,
+        "sensor_1": 518.67,
+        "sensor_2": 641.82,
+        "sensor_3": 1589.70,
+        "sensor_4": 1400.60,
+        "sensor_5": 14.62,
+        "sensor_6": 21.61,
+        "sensor_7": 554.36,
+        "sensor_8": 2388.02,
+        "sensor_9": 9046.19,
+        "sensor_10": 1.30,
+        "sensor_11": 47.47,
+        "sensor_12": 521.66,
+        "sensor_13": 2388.02,
+        "sensor_14": 8138.62,
+        "sensor_15": 8.4195,
+        "sensor_16": 0.03,
+        "sensor_17": 392.0,
+        "sensor_18": 2388.0,
+        "sensor_19": 100.0,
+        "sensor_20": 39.06,
+        "sensor_21": 23.419,
     }
 
 
 # ---------------------------------------------------------------------------
 # Artifact builder — runs the real pipeline on synthetic data
 # ---------------------------------------------------------------------------
+
 
 def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     """
@@ -66,19 +85,21 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     from xgboost import XGBRegressor
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    rng = np.random.default_rng(0)
+    # rng = np.random.default_rng(0)
 
     # ── Preprocess scaler ────────────────────────────────────────────────
     train_clean = pd.read_csv(processed_dir / "train_clean.csv")
-    pre_cols = [c for c in train_clean.columns
-                if c not in ["engine_id", "cycle", "rul"]]
+    pre_cols = [
+        c for c in train_clean.columns if c not in ["engine_id", "cycle", "rul"]
+    ]
     pre_scaler = StandardScaler().fit(train_clean[pre_cols])
     joblib.dump(pre_scaler, tmp_path / "preprocess_scaler.pkl")
 
     # ── Feature-engineered data → feature cols ───────────────────────────
     fe_train = pd.read_csv(feature_dir / "feature_engineered_train.csv")
-    full_feat_cols = [c for c in fe_train.columns
-                      if c not in ["engine_id", "cycle", "rul"]]
+    full_feat_cols = [
+        c for c in fe_train.columns if c not in ["engine_id", "cycle", "rul"]
+    ]
 
     with open(tmp_path / "feature_cols.txt", "w") as f:
         f.write("\n".join(full_feat_cols))
@@ -91,8 +112,8 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     # XGBoost is trained with cycle as the FIRST column (matching pipeline.py
     # which does X.insert(0, "cycle", ...) before returning to the model).
     xgb_cols = ["cycle"] + full_feat_cols
-    X_train  = fe_train[xgb_cols].values
-    y_train  = fe_train["rul"].values
+    X_train = fe_train[xgb_cols].values
+    y_train = fe_train["rul"].values
     xgb = XGBRegressor(n_estimators=10, max_depth=2, random_state=0)
     xgb.fit(X_train, y_train)
     joblib.dump(xgb, tmp_path / "best_xgb.pkl")
@@ -109,6 +130,7 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def artifacts(tmp_path, processed_dir, feature_dir):
     """Real pipeline artifacts built from synthetic processed/feature-engineered data."""
@@ -118,9 +140,10 @@ def artifacts(tmp_path, processed_dir, feature_dir):
 @pytest.fixture()
 def registry(artifacts):
     from src.inference.predict import ModelRegistry
+
     return ModelRegistry.from_paths(
         xgb_path=artifacts / "best_xgb.pkl",
-        lstm_path=artifacts / "best_lstm.pt",           # doesn't exist → lstm=None
+        lstm_path=artifacts / "best_lstm.pt",  # doesn't exist → lstm=None
         lstm_config_path=artifacts / "lstm_config.json",
         preprocess_scaler_path=artifacts / "preprocess_scaler.pkl",
         feature_scaler_path=artifacts / "feature_scaler.pkl",
@@ -132,12 +155,13 @@ def registry(artifacts):
 # Unit tests — InferencePipeline transforms
 # ---------------------------------------------------------------------------
 
-class TestInferencePipelineTransforms:
 
+class TestInferencePipelineTransforms:
     @pytest.fixture()
     def mock_pipeline(self, artifacts):
         """Pipeline built from real artifacts — always self-consistent."""
         from src.inference.pipeline import InferencePipeline
+
         return InferencePipeline(
             preprocess_scaler_path=artifacts / "preprocess_scaler.pkl",
             feature_scaler_path=artifacts / "feature_scaler.pkl",
@@ -165,7 +189,7 @@ class TestInferencePipelineTransforms:
         seq = mock_pipeline.transform_lstm(readings)
         n_feat = len(mock_pipeline.feature_cols)
         assert seq.shape == (1, SEQ_LEN, n_feat)
-        pad_rows = seq[0, :SEQ_LEN - 1, :]
+        pad_rows = seq[0, : SEQ_LEN - 1, :]
         assert np.allclose(pad_rows, 0.0), "Expected zero-padding at the front"
 
     def test_transform_xgb_uses_last_row(self, mock_pipeline):
@@ -180,8 +204,8 @@ class TestInferencePipelineTransforms:
 # Unit tests — ModelRegistry
 # ---------------------------------------------------------------------------
 
-class TestModelRegistry:
 
+class TestModelRegistry:
     def test_xgb_loaded(self, registry):
         assert registry.models_loaded["xgboost"] is True
 
@@ -205,6 +229,7 @@ class TestModelRegistry:
 
     def test_missing_xgb_raises_file_not_found(self, artifacts):
         from src.inference.predict import ModelRegistry
+
         with pytest.raises(FileNotFoundError):
             ModelRegistry.from_paths(
                 xgb_path=artifacts / "nonexistent.pkl",
@@ -220,8 +245,8 @@ class TestModelRegistry:
 # Integration tests — FastAPI via TestClient
 # ---------------------------------------------------------------------------
 
-class TestFastAPIEndpoints:
 
+class TestFastAPIEndpoints:
     @pytest.fixture()
     def client(self, registry):
         from fastapi.testclient import TestClient
@@ -246,9 +271,9 @@ class TestFastAPIEndpoints:
     def test_predict_xgb_response_schema(self, client):
         body = client.post("/predict/xgb", json=_sensor_row()).json()
         assert "predicted_rul" in body
-        assert "engine_id"     in body
-        assert "cycle"         in body
-        assert "model"         in body
+        assert "engine_id" in body
+        assert "cycle" in body
+        assert "model" in body
 
     def test_predict_xgb_rul_in_valid_range(self, client):
         rul = client.post("/predict/xgb", json=_sensor_row()).json()["predicted_rul"]
@@ -264,25 +289,33 @@ class TestFastAPIEndpoints:
 
     def test_predict_xgb_batch_returns_200(self, client):
         readings = [_sensor_row(cycle=c) for c in range(1, 8)]
-        assert client.post("/predict/xgb/batch", json={"readings": readings}).status_code == 200
+        assert (
+            client.post("/predict/xgb/batch", json={"readings": readings}).status_code
+            == 200
+        )
 
     def test_predict_xgb_batch_uses_last_reading(self, client):
         readings = [_sensor_row(engine_id=1, cycle=c) for c in range(1, 6)]
         body = client.post("/predict/xgb/batch", json={"readings": readings}).json()
         assert body["engine_id"] == 1
-        assert body["cycle"]     == 5
+        assert body["cycle"] == 5
 
     def test_predict_xgb_batch_empty_readings_returns_422(self, client):
-        assert client.post("/predict/xgb/batch", json={"readings": []}).status_code == 422
+        assert (
+            client.post("/predict/xgb/batch", json={"readings": []}).status_code == 422
+        )
 
     def test_predict_lstm_without_weights_returns_503(self, client):
         readings = [_sensor_row(cycle=c) for c in range(1, 6)]
-        assert client.post("/predict/lstm", json={"readings": readings}).status_code == 503
+        assert (
+            client.post("/predict/lstm", json={"readings": readings}).status_code == 503
+        )
 
 
 # ---------------------------------------------------------------------------
 # Regression test — double-scaling
 # ---------------------------------------------------------------------------
+
 
 class TestDoubleScalingRegression:
     """
@@ -320,7 +353,7 @@ class TestDoubleScalingRegression:
             for k, v in raw_reading.items()
         }
 
-        X_raw    = pipeline.transform_xgb([raw_reading])
+        X_raw = pipeline.transform_xgb([raw_reading])
         X_scaled = pipeline.transform_xgb([scaled_reading])
 
         # The two feature vectors must differ significantly

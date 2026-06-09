@@ -15,7 +15,6 @@ Run
 
 import os
 import warnings
-warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd
@@ -24,19 +23,18 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 
+warnings.filterwarnings("ignore")
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-#API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
-API_URL = os.environ.get(
-    "API_URL",
-    "https://nasa-rul-mle-production.up.railway.app"
-)
+# API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
+API_URL = os.environ.get("API_URL", "https://nasa-rul-mle-production.up.railway.app")
 PROCESSED_DIR = "data/processed"
 
-#DROPPED_SENSORS = {"sensor_1", "sensor_5", "sensor_10", "sensor_16", "sensor_18", "sensor_19"}
-#ALL_SENSORS = [f"sensor_{i}" for i in range(1, 22) if f"sensor_{i}" not in DROPPED_SENSORS]
+# DROPPED_SENSORS = {"sensor_1", "sensor_5", "sensor_10", "sensor_16", "sensor_18", "sensor_19"}
+# ALL_SENSORS = [f"sensor_{i}" for i in range(1, 22) if f"sensor_{i}" not in DROPPED_SENSORS]
 ALL_SENSORS = [f"sensor_{i}" for i in range(1, 22)]
 
 st.set_page_config(page_title="NASA Turbofan RUL", page_icon="✈️", layout="wide")
@@ -45,9 +43,10 @@ st.set_page_config(page_title="NASA Turbofan RUL", page_icon="✈️", layout="w
 # Data loading (cached)
 # ---------------------------------------------------------------------------
 
+
 @st.cache_data
 def load_test_data():
-    fe  = pd.read_csv(f"{PROCESSED_DIR}/feature_engineered_test.csv")
+    fe = pd.read_csv(f"{PROCESSED_DIR}/feature_engineered_test.csv")
     rul = pd.read_csv(f"{PROCESSED_DIR}/rul_clean.csv")
     rul.columns = ["rul"]
 
@@ -66,9 +65,11 @@ def check_api() -> bool:
     except Exception:
         return False
 
+
 # ---------------------------------------------------------------------------
 # API helpers
 # ---------------------------------------------------------------------------
+
 
 def build_sensor_row(row: pd.Series) -> dict:
     d = {"engine_id": int(row["engine_id"]), "cycle": int(row["cycle"])}
@@ -81,7 +82,9 @@ def build_sensor_row(row: pd.Series) -> dict:
 
 def predict_xgb_batch(readings: list) -> float | None:
     try:
-        r = requests.post(f"{API_URL}/predict/xgb/batch", json={"readings": readings}, timeout=10)
+        r = requests.post(
+            f"{API_URL}/predict/xgb/batch", json={"readings": readings}, timeout=10
+        )
         r.raise_for_status()
         return r.json()["predicted_rul"]
     except Exception:
@@ -90,11 +93,14 @@ def predict_xgb_batch(readings: list) -> float | None:
 
 def predict_lstm(readings: list) -> float | None:
     try:
-        r = requests.post(f"{API_URL}/predict/lstm", json={"readings": readings}, timeout=10)
+        r = requests.post(
+            f"{API_URL}/predict/lstm", json={"readings": readings}, timeout=10
+        )
         r.raise_for_status()
         return r.json()["predicted_rul"]
     except Exception:
         return None
+
 
 # ---------------------------------------------------------------------------
 # Header
@@ -112,7 +118,9 @@ else:
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab1, tab2, tab3 = st.tabs(["🔍 Engine Explorer", "📊 Batch Evaluation", "🎛️ Live Prediction"])
+tab1, tab2, tab3 = st.tabs(
+    ["🔍 Engine Explorer", "📊 Batch Evaluation", "🎛️ Live Prediction"]
+)
 
 # ===========================================================================
 # TAB 1 — Engine Explorer
@@ -131,21 +139,24 @@ with tab1:
 
         col_sel, col_sensor = st.columns([1, 2])
         with col_sel:
-            engine_id    = st.selectbox("Select Engine", engines)
+            engine_id = st.selectbox("Select Engine", engines)
             sensor_choice = st.selectbox(
-                "Sensor to plot", ALL_SENSORS,
+                "Sensor to plot",
+                ALL_SENSORS,
                 index=ALL_SENSORS.index("sensor_2") if "sensor_2" in ALL_SENSORS else 0,
             )
 
         engine_raw = raw_df[raw_df["engine_id"] == engine_id].copy()
-        engine_fe  = fe_df[fe_df["engine_id"] == engine_id].copy()
-        true_rul   = float(rul_df.iloc[engine_id - 1]["rul"])
-        n_cycles   = len(engine_raw)
+        engine_fe = fe_df[fe_df["engine_id"] == engine_id].copy()
+        true_rul = float(rul_df.iloc[engine_id - 1]["rul"])
+        n_cycles = len(engine_raw)
 
         with col_sensor:
             if sensor_choice in engine_raw.columns:
                 fig = px.line(
-                    engine_raw, x="cycle", y=sensor_choice,
+                    engine_raw,
+                    x="cycle",
+                    y=sensor_choice,
                     title=f"Engine {engine_id} — {sensor_choice} over {n_cycles} cycles",
                     labels={"cycle": "Cycle", sensor_choice: "Normalised value"},
                 )
@@ -178,17 +189,33 @@ with tab1:
                 c3.metric(
                     "LSTM RUL",
                     f"{lstm_rul:.1f} cycles" if lstm_rul is not None else "—",
-                    delta=f"{lstm_rul - true_rul:+.1f}" if lstm_rul is not None else None,
+                    delta=f"{lstm_rul - true_rul:+.1f}"
+                    if lstm_rul is not None
+                    else None,
                 )
 
                 results = {"Model": [], "Predicted RUL": []}
-                results["Model"].append("True RUL");     results["Predicted RUL"].append(true_rul)
-                if xgb_rul  is not None: results["Model"].append("XGBoost");  results["Predicted RUL"].append(xgb_rul)
-                if lstm_rul is not None: results["Model"].append("LSTM");     results["Predicted RUL"].append(lstm_rul)
+                results["Model"].append("True RUL")
+                results["Predicted RUL"].append(true_rul)
+
+                if xgb_rul is not None:
+                    results["Model"].append("XGBoost")
+                    results["Predicted RUL"].append(xgb_rul)
+
+                if lstm_rul is not None:
+                    results["Model"].append("LSTM")
+                    results["Predicted RUL"].append(lstm_rul)
 
                 fig2 = px.bar(
-                    pd.DataFrame(results), x="Model", y="Predicted RUL", color="Model",
-                    color_discrete_map={"True RUL": "gray", "XGBoost": "#1f77b4", "LSTM": "#ff7f0e"},
+                    pd.DataFrame(results),
+                    x="Model",
+                    y="Predicted RUL",
+                    color="Model",
+                    color_discrete_map={
+                        "True RUL": "gray",
+                        "XGBoost": "#1f77b4",
+                        "LSTM": "#ff7f0e",
+                    },
                     title=f"Engine {engine_id} — Predicted vs True RUL",
                 )
                 st.plotly_chart(fig2, use_container_width=True)
@@ -202,9 +229,13 @@ with tab1:
 
 with tab2:
     st.subheader("Batch Evaluation on Test Set (100 engines)")
-    st.caption("Runs predictions for all 100 test engines and compares against ground-truth RUL.")
+    st.caption(
+        "Runs predictions for all 100 test engines and compares against ground-truth RUL."
+    )
 
-    model_choice = st.radio("Model to evaluate", ["XGBoost", "LSTM", "Both"], horizontal=True)
+    model_choice = st.radio(
+        "Model to evaluate", ["XGBoost", "LSTM", "Both"], horizontal=True
+    )
 
     if st.button("Run Batch Evaluation", key="batch_eval"):
         if not api_ok:
@@ -218,15 +249,19 @@ with tab2:
 
                 for i, eid in enumerate(engines):
                     engine_raw = raw_df[raw_df["engine_id"] == eid]
-                    true_rul   = float(rul_df.iloc[eid - 1]["rul"])
-                    readings   = [build_sensor_row(row) for _, row in engine_raw.iterrows()]
+                    true_rul = float(rul_df.iloc[eid - 1]["rul"])
+                    readings = [
+                        build_sensor_row(row) for _, row in engine_raw.iterrows()
+                    ]
                     row = {"engine_id": eid, "true_rul": true_rul}
                     if model_choice in ("XGBoost", "Both"):
-                        row["xgb_pred"]  = predict_xgb_batch(readings)
+                        row["xgb_pred"] = predict_xgb_batch(readings)
                     if model_choice in ("LSTM", "Both"):
                         row["lstm_pred"] = predict_lstm(readings)
                     results.append(row)
-                    progress.progress((i + 1) / len(engines), text=f"Engine {eid}/{len(engines)}")
+                    progress.progress(
+                        (i + 1) / len(engines), text=f"Engine {eid}/{len(engines)}"
+                    )
 
                 progress.empty()
                 results_df = pd.DataFrame(results)
@@ -237,52 +272,93 @@ with tab2:
 
                 def show_metrics(df, pred_col, label, cols, offset=0):
                     valid = df.dropna(subset=[pred_col])
-                    err  = valid[pred_col] - valid["true_rul"]
-                    rmse = float(np.sqrt((err ** 2).mean()))
-                    mae  = float(err.abs().mean())
+                    err = valid[pred_col] - valid["true_rul"]
+                    rmse = float(np.sqrt((err**2).mean()))
+                    mae = float(err.abs().mean())
                     cols[offset].metric(f"{label} RMSE", f"{rmse:.2f}")
-                    cols[offset + 1].metric(f"{label} MAE",  f"{mae:.2f}")
+                    cols[offset + 1].metric(f"{label} MAE", f"{mae:.2f}")
 
                 if model_choice in ("XGBoost", "Both"):
-                    show_metrics(results_df, "xgb_pred",  "XGBoost", mcols, 0)
+                    show_metrics(results_df, "xgb_pred", "XGBoost", mcols, 0)
                 if model_choice in ("LSTM", "Both"):
-                    show_metrics(results_df, "lstm_pred", "LSTM", mcols, 2 if model_choice == "Both" else 0)
+                    show_metrics(
+                        results_df,
+                        "lstm_pred",
+                        "LSTM",
+                        mcols,
+                        2 if model_choice == "Both" else 0,
+                    )
 
                 # Scatter
                 st.markdown("#### Predicted vs True RUL")
                 fig = go.Figure()
-                fig.add_shape(type="line", x0=0, y0=0, x1=125, y1=150,
-                              line=dict(color="gray", dash="dash"))
+                fig.add_shape(
+                    type="line",
+                    x0=0,
+                    y0=0,
+                    x1=125,
+                    y1=150,
+                    line=dict(color="gray", dash="dash"),
+                )
                 if model_choice in ("XGBoost", "Both") and "xgb_pred" in results_df:
-                    fig.add_trace(go.Scatter(
-                        x=results_df["true_rul"], y=results_df["xgb_pred"],
-                        mode="markers", name="XGBoost",
-                        marker=dict(color="#1f77b4", size=7, opacity=0.7),
-                    ))
+                    fig.add_trace(
+                        go.Scatter(
+                            x=results_df["true_rul"],
+                            y=results_df["xgb_pred"],
+                            mode="markers",
+                            name="XGBoost",
+                            marker=dict(color="#1f77b4", size=7, opacity=0.7),
+                        )
+                    )
                 if model_choice in ("LSTM", "Both") and "lstm_pred" in results_df:
-                    fig.add_trace(go.Scatter(
-                        x=results_df["true_rul"], y=results_df["lstm_pred"],
-                        mode="markers", name="LSTM",
-                        marker=dict(color="#ff7f0e", size=7, opacity=0.7),
-                    ))
-                fig.update_layout(xaxis_title="True RUL (cycles)", yaxis_title="Predicted RUL (cycles)",
-                                  title="Predicted vs True RUL — Test Set")
+                    fig.add_trace(
+                        go.Scatter(
+                            x=results_df["true_rul"],
+                            y=results_df["lstm_pred"],
+                            mode="markers",
+                            name="LSTM",
+                            marker=dict(color="#ff7f0e", size=7, opacity=0.7),
+                        )
+                    )
+                fig.update_layout(
+                    xaxis_title="True RUL (cycles)",
+                    yaxis_title="Predicted RUL (cycles)",
+                    title="Predicted vs True RUL — Test Set",
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Error distribution
                 st.markdown("#### Prediction Error Distribution")
                 err_data = []
                 if model_choice in ("XGBoost", "Both") and "xgb_pred" in results_df:
-                    err_data.append(go.Histogram(
-                        x=(results_df["xgb_pred"] - results_df["true_rul"]).dropna(),
-                        name="XGBoost", opacity=0.7, marker_color="#1f77b4"))
+                    err_data.append(
+                        go.Histogram(
+                            x=(
+                                results_df["xgb_pred"] - results_df["true_rul"]
+                            ).dropna(),
+                            name="XGBoost",
+                            opacity=0.7,
+                            marker_color="#1f77b4",
+                        )
+                    )
                 if model_choice in ("LSTM", "Both") and "lstm_pred" in results_df:
-                    err_data.append(go.Histogram(
-                        x=(results_df["lstm_pred"] - results_df["true_rul"]).dropna(),
-                        name="LSTM", opacity=0.7, marker_color="#ff7f0e"))
+                    err_data.append(
+                        go.Histogram(
+                            x=(
+                                results_df["lstm_pred"] - results_df["true_rul"]
+                            ).dropna(),
+                            name="LSTM",
+                            opacity=0.7,
+                            marker_color="#ff7f0e",
+                        )
+                    )
                 fig_err = go.Figure(err_data)
-                fig_err.update_layout(barmode="overlay", xaxis_title="Error (cycles)",
-                                      yaxis_title="Count", title="Error Distribution (Predicted − True)")
+                fig_err.update_layout(
+                    barmode="overlay",
+                    xaxis_title="Error (cycles)",
+                    yaxis_title="Count",
+                    title="Error Distribution (Predicted − True)",
+                )
                 st.plotly_chart(fig_err, use_container_width=True)
 
                 with st.expander("View full results table"):
@@ -297,31 +373,47 @@ with tab2:
 
 with tab3:
     st.subheader("Live Single-Cycle Prediction")
-    st.caption("Enter raw sensor values manually and get an instant XGBoost RUL prediction.")
+    st.caption(
+        "Enter raw sensor values manually and get an instant XGBoost RUL prediction."
+    )
 
     s_col1, s_col2 = st.columns(2)
     engine_id_in = s_col1.number_input("Engine ID", min_value=1, max_value=999, value=1)
-    cycle_in     = s_col2.number_input("Cycle",     min_value=1, max_value=500, value=50)
+    cycle_in = s_col2.number_input("Cycle", min_value=1, max_value=500, value=50)
 
     st.markdown("#### Settings")
     c1, c2, c3 = st.columns(3)
     setting_1 = c1.number_input("Setting 1", value=-0.0007, format="%.4f")
     setting_2 = c2.number_input("Setting 2", value=-0.0004, format="%.4f")
-    setting_3 = c3.number_input("Setting 3", value=100.0,   format="%.2f")
+    setting_3 = c3.number_input("Setting 3", value=100.0, format="%.2f")
 
     st.markdown("#### Sensor Values")
     defaults = {
-        "sensor_1": 518.67,  "sensor_2": 641.82,  "sensor_3": 1589.70,
-        "sensor_4": 1400.60, "sensor_5": 14.62,   "sensor_6": 21.61,
-        "sensor_7": 554.36,  "sensor_8": 2388.02,  "sensor_9": 9046.19,
-        "sensor_10": 1.30,   "sensor_11": 47.47,  "sensor_12": 521.66,
-        "sensor_13": 2388.02,"sensor_14": 8138.62, "sensor_15": 8.4195,
-        "sensor_16": 0.03,   "sensor_17": 392.0,  "sensor_18": 2388.0,
-        "sensor_19": 100.0,  "sensor_20": 39.06,  "sensor_21": 23.419,
+        "sensor_1": 518.67,
+        "sensor_2": 641.82,
+        "sensor_3": 1589.70,
+        "sensor_4": 1400.60,
+        "sensor_5": 14.62,
+        "sensor_6": 21.61,
+        "sensor_7": 554.36,
+        "sensor_8": 2388.02,
+        "sensor_9": 9046.19,
+        "sensor_10": 1.30,
+        "sensor_11": 47.47,
+        "sensor_12": 521.66,
+        "sensor_13": 2388.02,
+        "sensor_14": 8138.62,
+        "sensor_15": 8.4195,
+        "sensor_16": 0.03,
+        "sensor_17": 392.0,
+        "sensor_18": 2388.0,
+        "sensor_19": 100.0,
+        "sensor_20": 39.06,
+        "sensor_21": 23.419,
     }
     sensor_values = {}
-    sensor_list   = [f"sensor_{i}" for i in range(1, 22)]
-    for row_sensors in [sensor_list[i:i+7] for i in range(0, 21, 7)]:
+    sensor_list = [f"sensor_{i}" for i in range(1, 22)]
+    for row_sensors in [sensor_list[i : i + 7] for i in range(0, 21, 7)]:
         cols = st.columns(len(row_sensors))
         for col, sname in zip(cols, row_sensors):
             sensor_values[sname] = col.number_input(
@@ -333,43 +425,57 @@ with tab3:
             st.error("API is offline.")
         else:
             payload = {
-                "engine_id": int(engine_id_in), "cycle": int(cycle_in),
-                "setting_1": setting_1, "setting_2": setting_2, "setting_3": setting_3,
+                "engine_id": int(engine_id_in),
+                "cycle": int(cycle_in),
+                "setting_1": setting_1,
+                "setting_2": setting_2,
+                "setting_3": setting_3,
                 **sensor_values,
             }
             with st.spinner("Getting prediction…"):
                 try:
-                    r = requests.post(f"{API_URL}/predict/xgb", json=payload, timeout=10)
+                    r = requests.post(
+                        f"{API_URL}/predict/xgb", json=payload, timeout=10
+                    )
                     r.raise_for_status()
                     result = r.json()
                     st.success("Prediction complete!")
 
                     m1, m2, m3 = st.columns(3)
-                    m1.metric("Engine",        result["engine_id"])
-                    m2.metric("Cycle",         result["cycle"])
+                    m1.metric("Engine", result["engine_id"])
+                    m2.metric("Cycle", result["cycle"])
                     m3.metric("Predicted RUL", f"{result['predicted_rul']} cycles")
 
                     rul_val = result["predicted_rul"]
-                    color   = "#2ecc71" if rul_val > 80 else "#f39c12" if rul_val > 30 else "#e74c3c"
+                    color = (
+                        "#2ecc71"
+                        if rul_val > 80
+                        else "#f39c12"
+                        if rul_val > 30
+                        else "#e74c3c"
+                    )
 
-                    fig_gauge = go.Figure(go.Indicator(
-                        mode="gauge+number",
-                        value=rul_val,
-                        title={"text": "Remaining Useful Life (cycles)"},
-                        gauge={
-                            "axis": {"range": [0, 125]},
-                            "bar":  {"color": color},
-                            "steps": [
-                                {"range": [0,  30],  "color": "#fdecea"},
-                                {"range": [30, 80],  "color": "#fef9e7"},
-                                {"range": [80, 125], "color": "#eafaf1"},
-                            ],
-                            "threshold": {
-                                "line": {"color": "red", "width": 3},
-                                "thickness": 0.75, "value": 30,
+                    fig_gauge = go.Figure(
+                        go.Indicator(
+                            mode="gauge+number",
+                            value=rul_val,
+                            title={"text": "Remaining Useful Life (cycles)"},
+                            gauge={
+                                "axis": {"range": [0, 125]},
+                                "bar": {"color": color},
+                                "steps": [
+                                    {"range": [0, 30], "color": "#fdecea"},
+                                    {"range": [30, 80], "color": "#fef9e7"},
+                                    {"range": [80, 125], "color": "#eafaf1"},
+                                ],
+                                "threshold": {
+                                    "line": {"color": "red", "width": 3},
+                                    "thickness": 0.75,
+                                    "value": 30,
+                                },
                             },
-                        },
-                    ))
+                        )
+                    )
                     fig_gauge.update_layout(height=300)
                     st.plotly_chart(fig_gauge, use_container_width=True)
 

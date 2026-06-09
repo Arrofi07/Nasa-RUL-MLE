@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 import joblib
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -22,6 +21,7 @@ from src.inference.pipeline import InferencePipeline
 # ---------------------------------------------------------------------------
 # LSTM architecture (must match training exactly)
 # ---------------------------------------------------------------------------
+
 
 class LSTMModel(nn.Module):
     def __init__(
@@ -41,7 +41,7 @@ class LSTMModel(nn.Module):
             dropout=lstm_dropout,
         )
         self.head = nn.Sequential(
-            nn.LayerNorm(hidden_size),       # works on any batch size, including 1
+            nn.LayerNorm(hidden_size),  # works on any batch size, including 1
             nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -57,6 +57,7 @@ class LSTMModel(nn.Module):
 # ---------------------------------------------------------------------------
 # Model registry — one instance shared for the life of the server
 # ---------------------------------------------------------------------------
+
 
 class ModelRegistry:
     """
@@ -74,9 +75,9 @@ class ModelRegistry:
         lstm_config: dict,
         device: torch.device,
     ) -> None:
-        self.xgb   = xgb_model
-        self.lstm  = lstm_model
-        self.pipe  = pipeline
+        self.xgb = xgb_model
+        self.lstm = lstm_model
+        self.pipe = pipeline
         self.lstm_config = lstm_config
         self.device = device
 
@@ -85,12 +86,12 @@ class ModelRegistry:
     @classmethod
     def from_paths(
         cls,
-        xgb_path: str | Path              = "models/best_xgb.pkl",
-        lstm_path: str | Path             = "models/best_lstm.pt",
-        lstm_config_path: str | Path      = "models/lstm_config.json",
+        xgb_path: str | Path = "models/best_xgb.pkl",
+        lstm_path: str | Path = "models/best_lstm.pt",
+        lstm_config_path: str | Path = "models/lstm_config.json",
         preprocess_scaler_path: str | Path = "models/preprocess_scaler.pkl",
-        feature_scaler_path: str | Path   = "models/feature_scaler.pkl",
-        feature_cols_path: str | Path     = "models/feature_cols.txt",
+        feature_scaler_path: str | Path = "models/feature_scaler.pkl",
+        feature_cols_path: str | Path = "models/feature_cols.txt",
     ) -> "ModelRegistry":
         """
         Load all artifacts from disk.
@@ -144,21 +145,21 @@ class ModelRegistry:
             )
             lstm_model.eval()
 
-            #print("=== MODEL FEATURES ===")
-            #print(list(xgb_model.feature_names_in_))
+            # print("=== MODEL FEATURES ===")
+            # print(list(xgb_model.feature_names_in_))
 
-            #print("=== PIPELINE FEATURES ===")
-            #print(pipeline.feature_cols)
+            # print("=== PIPELINE FEATURES ===")
+            # print(pipeline.feature_cols)
 
-            #print(
+            # print(
             #    "Missing from pipeline:",
             #    set(xgb_model.feature_names_in_) - set(pipeline.feature_cols)
-            #)
+            # )
 
-            #print(
+            # print(
             #    "Extra in pipeline:",
             #    set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
-            #)
+            # )
 
         return cls(xgb_model, lstm_model, pipeline, lstm_config, device)
 
@@ -170,7 +171,7 @@ class ModelRegistry:
     def models_loaded(self) -> dict[str, bool]:
         return {
             "xgboost": self.xgb is not None,
-            "lstm":    self.lstm is not None,
+            "lstm": self.lstm is not None,
         }
 
     # ------------------------------------------------------------------

@@ -41,9 +41,9 @@ from src.features.build_feature import select_features
 # Paths — change these if your layout differs
 # ---------------------------------------------------------------------------
 
-RAW_DIR       = Path("data/raw")
+RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
-MODEL_DIR     = Path("models")
+MODEL_DIR = Path("models")
 
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +54,6 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 print("📦 Fitting preprocess scaler …")
 
 train_raw = pd.read_csv(RAW_DIR / "train.csv")
-
 
 
 # Remove constant columns (same logic as remove_constant_features)
@@ -98,10 +97,7 @@ for col in selected_features:
 # Add diff features
 for col in selected_features:
     train_clean[f"{col}_diff"] = (
-        train_clean.groupby("engine_id")[col]
-        .diff()
-        .fillna(0)
-        .round(3)
+        train_clean.groupby("engine_id")[col].diff().fillna(0).round(3)
     )
 
 # Columns to scale (everything except meta columns)
@@ -124,8 +120,7 @@ print("📦 Saving feature column list …")
 # that was passed to XGBoost / LSTM
 fe_train = pd.read_csv(PROCESSED_DIR / "feature_engineered_train.csv")
 model_feature_cols = [
-    c for c in fe_train.columns
-    if c not in ["engine_id", "cycle", "rul"]
+    c for c in fe_train.columns if c not in ["engine_id", "cycle", "rul"]
 ]
 
 with open(MODEL_DIR / "feature_cols.txt", "w") as f:

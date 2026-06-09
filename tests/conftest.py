@@ -23,8 +23,8 @@ import pytest
 # Sizing constants — large enough for feature selection to work reliably
 # ---------------------------------------------------------------------------
 
-N_ENGINES  = 10
-N_CYCLES   = 80
+N_ENGINES = 10
+N_CYCLES = 80
 N_FEATURES = 6
 
 
@@ -32,15 +32,18 @@ N_FEATURES = 6
 # Low-level helpers
 # ---------------------------------------------------------------------------
 
-def _make_raw_train(n_engines: int = N_ENGINES, cycles_per_engine: int = N_CYCLES) -> pd.DataFrame:
+
+def _make_raw_train(
+    n_engines: int = N_ENGINES, cycles_per_engine: int = N_CYCLES
+) -> pd.DataFrame:
     """Synthetic FD001-like training data (space-separated, no header)."""
     rng = np.random.default_rng(42)
     rows = []
     for eid in range(1, n_engines + 1):
         for c in range(1, cycles_per_engine + 1):
             row = [eid, c]
-            row += rng.uniform(-1, 1, 3).tolist()        # 3 settings
-            row += rng.uniform(400, 700, 21).tolist()    # 21 sensors
+            row += rng.uniform(-1, 1, 3).tolist()  # 3 settings
+            row += rng.uniform(400, 700, 21).tolist()  # 21 sensors
             rows.append(row)
     cols = (
         ["engine_id", "cycle"]
@@ -55,12 +58,13 @@ def _make_rul(n_engines: int = N_ENGINES) -> pd.DataFrame:
     return pd.DataFrame({"rul": rng.integers(10, 125, n_engines)})
 
 
-def _make_feature_df(n_engines=N_ENGINES, n_cycles=N_CYCLES,
-                     n_features=N_FEATURES, include_rul=True) -> pd.DataFrame:
+def _make_feature_df(
+    n_engines=N_ENGINES, n_cycles=N_CYCLES, n_features=N_FEATURES, include_rul=True
+) -> pd.DataFrame:
     """
     Minimal feature-engineered DataFrame for in-memory tests.
 
-    RUL decreases linearly per engine so at least some features 
+    RUL decreases linearly per engine so at least some features
     can have non-zero correlation with it.
     """
     rng = np.random.default_rng(7)
@@ -71,10 +75,12 @@ def _make_feature_df(n_engines=N_ENGINES, n_cycles=N_CYCLES,
             row = {"engine_id": eid, "cycle": c}
             # Mix signal + noise so correlation with RUL is detectable
             rul_val = max(0, n_cycles - c)
-            row.update({
-                feat_cols[0]: rul_val * 0.1 + rng.standard_normal(),  # correlated
-                **{f: rng.standard_normal() for f in feat_cols[1:]},   # noise
-            })
+            row.update(
+                {
+                    feat_cols[0]: rul_val * 0.1 + rng.standard_normal(),  # correlated
+                    **{f: rng.standard_normal() for f in feat_cols[1:]},  # noise
+                }
+            )
             if include_rul:
                 row["rul"] = rul_val
             rows.append(row)
@@ -85,16 +91,17 @@ def _make_feature_df(n_engines=N_ENGINES, n_cycles=N_CYCLES,
 # Raw file fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def raw_dir(tmp_path):
     """Temp dir with synthetic FD001-format text files (no header, space-sep)."""
     train = _make_raw_train()
-    test  = _make_raw_train(cycles_per_engine=20)
-    rul   = _make_rul()
+    test = _make_raw_train(cycles_per_engine=20)
+    rul = _make_rul()
 
     train.to_csv(tmp_path / "train_FD001.txt", sep=" ", index=False, header=False)
-    test.to_csv( tmp_path / "test_FD001.txt",  sep=" ", index=False, header=False)
-    rul.to_csv(  tmp_path / "RUL_FD001.txt",   sep=" ", index=False, header=False)
+    test.to_csv(tmp_path / "test_FD001.txt", sep=" ", index=False, header=False)
+    rul.to_csv(tmp_path / "RUL_FD001.txt", sep=" ", index=False, header=False)
     return tmp_path
 
 
@@ -102,12 +109,13 @@ def raw_dir(tmp_path):
 def raw_csv_dir(tmp_path, raw_dir):
     """Temp dir with load.py output: train.csv, test.csv, rul.csv."""
     from src.data.load import load_and_preprocess_data
+
     out = tmp_path / "raw"
     out.mkdir()
     load_and_preprocess_data(
         train_path=str(raw_dir / "train_FD001.txt"),
-        test_path=str(raw_dir  / "test_FD001.txt"),
-        rul_path=str(raw_dir   / "RUL_FD001.txt"),
+        test_path=str(raw_dir / "test_FD001.txt"),
+        rul_path=str(raw_dir / "RUL_FD001.txt"),
         output_dir=out,
     )
     return out
@@ -117,6 +125,7 @@ def raw_csv_dir(tmp_path, raw_dir):
 def processed_dir(tmp_path, raw_csv_dir):
     """Temp dir with preprocess.py output: train_clean.csv, test_clean.csv, rul_clean.csv."""
     from src.data.preprocess import preprocess_data
+
     out = tmp_path / "processed"
     out.mkdir()
     preprocess_data(raw_dir=raw_csv_dir, processed_dir=out)
@@ -153,6 +162,7 @@ def model_dir(tmp_path):
 # ---------------------------------------------------------------------------
 # In-memory DataFrame fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def raw_train_df():

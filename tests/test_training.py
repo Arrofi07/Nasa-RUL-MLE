@@ -16,7 +16,6 @@ import joblib
 
 from src.training.train_baseline import (
     evaluate,
-    load_data,
     prepare_data,
     save_best_model,
     train_models,
@@ -27,6 +26,7 @@ from src.training.train_baseline import (
 # ===========================================================================
 # Helpers
 # ===========================================================================
+
 
 def _make_engineered_dfs(n_engines=5, n_cycles=30, n_features=6):
     """Minimal feature-engineered DataFrames for training tests."""
@@ -47,8 +47,8 @@ def _make_engineered_dfs(n_engines=5, n_cycles=30, n_features=6):
         rows_test.append(row_t)
 
     train_df = pd.DataFrame(rows_train)
-    test_df  = pd.DataFrame(rows_test)
-    rul_df   = pd.DataFrame({"rul": rng.integers(10, 100, n_engines)})
+    test_df = pd.DataFrame(rows_test)
+    rul_df = pd.DataFrame({"rul": rng.integers(10, 100, n_engines)})
     return train_df, test_df, rul_df
 
 
@@ -58,7 +58,6 @@ def _make_engineered_dfs(n_engines=5, n_cycles=30, n_features=6):
 
 
 class TestPrepareData:
-
     def test_X_shape(self):
         train, test, rul = _make_engineered_dfs()
         X, y, X_test, y_test = prepare_data(train, test, rul)
@@ -97,7 +96,6 @@ class TestPrepareData:
 
 
 class TestTrainModels:
-
     @pytest.fixture()
     def trained_models(self):
         train, test, rul = _make_engineered_dfs()
@@ -113,7 +111,9 @@ class TestTrainModels:
         for name, model in models.items():
             assert hasattr(model, "predict"), f"{name} has no predict method"
 
-    @pytest.mark.parametrize("model_name", ["Linear", "Ridge", "Random Forest", "XGBoost"])
+    @pytest.mark.parametrize(
+        "model_name", ["Linear", "Ridge", "Random Forest", "XGBoost"]
+    )
     def test_predictions_correct_shape(self, model_name):
         train, test, rul = _make_engineered_dfs()
         X, y, X_test, _ = prepare_data(train, test, rul)
@@ -121,7 +121,9 @@ class TestTrainModels:
         preds = models[model_name].predict(X_test)
         assert preds.shape == (len(X_test),)
 
-    @pytest.mark.parametrize("model_name", ["Linear", "Ridge", "Random Forest", "XGBoost"])
+    @pytest.mark.parametrize(
+        "model_name", ["Linear", "Ridge", "Random Forest", "XGBoost"]
+    )
     def test_predictions_finite(self, model_name):
         train, test, rul = _make_engineered_dfs()
         X, y, X_test, _ = prepare_data(train, test, rul)
@@ -136,7 +138,6 @@ class TestTrainModels:
 
 
 class TestEvaluate:
-
     def test_returns_three_values(self):
         train, test, rul = _make_engineered_dfs()
         X, y, X_test, y_test = prepare_data(train, test, rul)
@@ -150,17 +151,18 @@ class TestEvaluate:
         models = train_models(X, y)
         rmse, mae, r2 = evaluate(models["XGBoost"], X_test, y_test)
         assert rmse >= 0
-        assert mae  >= 0
+        assert mae >= 0
 
     def test_perfect_predictions_zero_error(self):
         from sklearn.linear_model import LinearRegression
+
         X = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
         y = pd.Series([2.0, 4.0, 6.0])
         model = LinearRegression().fit(X, y)
         rmse, mae, r2 = evaluate(model, X, y)
         assert rmse == pytest.approx(0.0, abs=1e-6)
-        assert mae  == pytest.approx(0.0, abs=1e-6)
-        assert r2   == pytest.approx(1.0, abs=1e-6)
+        assert mae == pytest.approx(0.0, abs=1e-6)
+        assert r2 == pytest.approx(1.0, abs=1e-6)
 
     def test_r2_between_neg_inf_and_one(self):
         train, test, rul = _make_engineered_dfs()
@@ -176,15 +178,16 @@ class TestEvaluate:
 
 
 class TestSaveBestModel:
-
     def test_file_created(self, model_dir):
         train, test, rul = _make_engineered_dfs()
         X, y, X_test, y_test = prepare_data(train, test, rul)
         models = train_models(X, y)
-        results = pd.DataFrame([
-            {"Model": "XGBoost", "RMSE_Test": 10.0},
-            {"Model": "Linear",  "RMSE_Test": 15.0},
-        ])
+        results = pd.DataFrame(
+            [
+                {"Model": "XGBoost", "RMSE_Test": 10.0},
+                {"Model": "Linear", "RMSE_Test": 15.0},
+            ]
+        )
         name, path = save_best_model(models, results, output_dir=model_dir)
         assert path.exists(), f"Model file not created at {path}"
 
@@ -201,10 +204,16 @@ class TestSaveBestModel:
         train, test, rul = _make_engineered_dfs()
         X, y, X_test, y_test = prepare_data(train, test, rul)
         models = train_models(X, y)
-        results = pd.DataFrame([
-            {"Model": "Ridge",  "RMSE_Test": 5.0},   # best
-            {"Model": "Linear", "RMSE_Test": 20.0},
-        ]).sort_values("RMSE_Test").reset_index(drop=True)
+        results = (
+            pd.DataFrame(
+                [
+                    {"Model": "Ridge", "RMSE_Test": 5.0},  # best
+                    {"Model": "Linear", "RMSE_Test": 20.0},
+                ]
+            )
+            .sort_values("RMSE_Test")
+            .reset_index(drop=True)
+        )
         name, _ = save_best_model(models, results, output_dir=model_dir)
         assert name == "Ridge"
 
@@ -215,7 +224,6 @@ class TestSaveBestModel:
 
 
 class TestTrainPipelineIntegration:
-
     def test_returns_dataframe(self, feature_dir, model_dir):
         result = train_pipeline(processed_dir=feature_dir, model_dir=model_dir)
         assert isinstance(result, pd.DataFrame)

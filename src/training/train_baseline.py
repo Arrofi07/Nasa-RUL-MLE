@@ -52,17 +52,11 @@ def load_data(processed_dir: Path | str = PROCESSED_DIR):
 
     processed_dir = Path(processed_dir)
 
-    train_df = pd.read_csv(
-        processed_dir / "feature_engineered_train.csv"
-    )
+    train_df = pd.read_csv(processed_dir / "feature_engineered_train.csv")
 
-    test_df = pd.read_csv(
-        processed_dir / "feature_engineered_test.csv"
-    )
+    test_df = pd.read_csv(processed_dir / "feature_engineered_test.csv")
 
-    rul_df = pd.read_csv(
-        processed_dir / "rul_clean.csv"
-    )
+    rul_df = pd.read_csv(processed_dir / "rul_clean.csv")
 
     return train_df, test_df, rul_df
 
@@ -70,21 +64,13 @@ def load_data(processed_dir: Path | str = PROCESSED_DIR):
 def prepare_data(train_df, test_df, rul_df):
     """Create train/validation/test matrices."""
 
-    X = train_df.drop(
-        columns=["engine_id", "rul"]
-    )
+    X = train_df.drop(columns=["engine_id", "rul"])
 
     y = train_df["rul"]
 
-    test_last = (
-        test_df.groupby("engine_id")
-        .last()
-        .reset_index()
-    )
+    test_last = test_df.groupby("engine_id").last().reset_index()
 
-    X_test = test_last.drop(
-        columns=["engine_id"]
-    )
+    X_test = test_last.drop(columns=["engine_id"])
 
     y_test = rul_df["rul"]
 
@@ -99,18 +85,13 @@ def train_models(
 
     models = {
         "Linear": LinearRegression(),
-
-        "Ridge": Ridge(
-            alpha=1.0
-        ),
-
+        "Ridge": Ridge(alpha=1.0),
         "Random Forest": RandomForestRegressor(
             n_estimators=100,
             max_depth=10,
             random_state=42,
             n_jobs=-1,
         ),
-
         "XGBoost": XGBRegressor(
             n_estimators=200,
             learning_rate=0.05,
@@ -140,7 +121,6 @@ def evaluate_models(
     results = []
 
     for name, model in models.items():
-
         rmse_val, mae_val, r2_val = evaluate(
             model,
             X_val,
@@ -165,11 +145,7 @@ def evaluate_models(
             }
         )
 
-    results_df = (
-        pd.DataFrame(results)
-        .sort_values("RMSE_Test")
-        .reset_index(drop=True)
-    )
+    results_df = pd.DataFrame(results).sort_values("RMSE_Test").reset_index(drop=True)
 
     return results_df
 
@@ -187,20 +163,13 @@ def save_best_model(
 
     best_model = models[best_model_name]
 
-    model_path = (
-        output_dir
-        / f"best_{best_model_name.lower().replace(' ', '_')}.pkl"
-    )
+    model_path = output_dir / f"best_{best_model_name.lower().replace(' ', '_')}.pkl"
 
     joblib.dump(best_model, model_path)
 
-    print(
-        f"✅ Best model: {best_model_name}"
-    )
+    print(f"✅ Best model: {best_model_name}")
 
-    print(
-        f"✅ Saved model to {model_path}"
-    )
+    print(f"✅ Saved model to {model_path}")
 
     return best_model_name, model_path
 
@@ -211,9 +180,7 @@ def train_pipeline(
 ):
     """Run full training pipeline."""
 
-    train_df, test_df, rul_df = load_data(
-        processed_dir
-    )
+    train_df, test_df, rul_df = load_data(processed_dir)
 
     X, y, X_test, y_test = prepare_data(
         train_df,
@@ -221,13 +188,11 @@ def train_pipeline(
         rul_df,
     )
 
-    X_train, X_val, y_train, y_val = (
-        train_test_split(
-            X,
-            y,
-            test_size=0.2,
-            random_state=42,
-        )
+    X_train, X_val, y_train, y_val = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
     )
 
     models = train_models(

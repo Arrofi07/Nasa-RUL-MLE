@@ -31,6 +31,7 @@ from src.inference.schemas import (
 # Lifespan — load models once at startup
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -72,6 +73,7 @@ app = FastAPI(
 # Dependency
 # ---------------------------------------------------------------------------
 
+
 def get_registry(request: Request) -> ModelRegistry:
     registry: ModelRegistry | None = request.app.state.registry
     if registry is None:
@@ -90,6 +92,7 @@ def get_registry(request: Request) -> ModelRegistry:
 @app.get("/")
 def root():
     return {"message": "NASA Turbofan RUL Prediction API is running 🚀"}
+
 
 @app.get(
     "/health",
@@ -210,6 +213,7 @@ def predict_lstm(
 # ---------------------------------------------------------------------------
 # Global exception handler
 # ---------------------------------------------------------------------------
+
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:

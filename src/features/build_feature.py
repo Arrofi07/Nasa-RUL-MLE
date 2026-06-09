@@ -31,6 +31,7 @@ _META_COLS = {"engine_id", "cycle", "rul"}
 # Feature selection
 # ---------------------------------------------------------------------------
 
+
 def select_features(
     train_df: pd.DataFrame,
     threshold: float = 0.2,
@@ -53,10 +54,7 @@ def select_features(
     """
     # Stage 1: correlation filter
     corr = train_df.corr(numeric_only=True)["rul"].abs()
-    selected = [
-        c for c in corr[corr > threshold].index
-        if c not in _META_COLS
-    ]
+    selected = [c for c in corr[corr > threshold].index if c not in _META_COLS]
 
     print(
         f"✅ Selected {len(selected)} features after correlation filter "
@@ -85,12 +83,12 @@ def select_features(
             xgb.fit(X, y)
 
             importances = dict(zip(selected, xgb.feature_importances_))
-            selected = sorted(importances, key=importances.get, reverse=True)[:xgb_top_k]
+            selected = sorted(importances, key=importances.get, reverse=True)[
+                :xgb_top_k
+            ]
             selected = sorted(selected, key=lambda c: list(train_df.columns).index(c))
 
-            print(
-                f"✅ Reduced to top {xgb_top_k} features by XGBoost gain importance"
-            )
+            print(f"✅ Reduced to top {xgb_top_k} features by XGBoost gain importance")
         except ImportError:
             print("⚠️  xgboost not available — skipping importance filter")
 
@@ -100,6 +98,7 @@ def select_features(
 # ---------------------------------------------------------------------------
 # Rolling features
 # ---------------------------------------------------------------------------
+
 
 def add_rolling_features(
     train_df: pd.DataFrame,
@@ -123,6 +122,7 @@ def add_rolling_features(
 # Difference features
 # ---------------------------------------------------------------------------
 
+
 def add_difference_features(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -131,12 +131,7 @@ def add_difference_features(
     """Create cycle-to-cycle degradation features."""
     for col in features:
         for df in [train_df, test_df]:
-            df[f"{col}_diff"] = (
-                df.groupby("engine_id")[col]
-                .diff()
-                .fillna(0)
-                .round(3)
-            )
+            df[f"{col}_diff"] = df.groupby("engine_id")[col].diff().fillna(0).round(3)
     print("✅ Added difference features")
     return train_df, test_df
 
@@ -144,6 +139,7 @@ def add_difference_features(
 # ---------------------------------------------------------------------------
 # Scaling
 # ---------------------------------------------------------------------------
+
 
 def scale_features(
     train_df: pd.DataFrame,
@@ -153,9 +149,9 @@ def scale_features(
     feature_cols = [c for c in train_df.columns if c not in _META_COLS]
     scaler = StandardScaler()
     train_df = train_df.copy()
-    test_df  = test_df.copy()
+    test_df = test_df.copy()
     train_df[feature_cols] = scaler.fit_transform(train_df[feature_cols])
-    test_df[feature_cols]  = scaler.transform(test_df[feature_cols])
+    test_df[feature_cols] = scaler.transform(test_df[feature_cols])
     print(f"✅ Standardized {len(feature_cols)} features")
     return train_df, test_df
 
@@ -163,6 +159,7 @@ def scale_features(
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def build_features(
     processed_dir: Path | str = PROCESSED_DIR,
@@ -174,7 +171,7 @@ def build_features(
     processed_dir = Path(processed_dir)
 
     train_df = pd.read_csv(processed_dir / "train_clean.csv")
-    test_df  = pd.read_csv(processed_dir / "test_clean.csv")
+    test_df = pd.read_csv(processed_dir / "test_clean.csv")
 
     selected = select_features(
         train_df,
@@ -183,14 +180,16 @@ def build_features(
     )
 
     train_df = train_df[["engine_id", "cycle"] + selected + ["rul"]]
-    test_df  = test_df[["engine_id", "cycle"] + selected]
+    test_df = test_df[["engine_id", "cycle"] + selected]
 
-    train_df, test_df = add_rolling_features(train_df, test_df, selected, rolling_window)
+    train_df, test_df = add_rolling_features(
+        train_df, test_df, selected, rolling_window
+    )
     train_df, test_df = add_difference_features(train_df, test_df, selected)
     train_df, test_df = scale_features(train_df, test_df)
 
     train_df.to_csv(processed_dir / "feature_engineered_train.csv", index=False)
-    test_df.to_csv( processed_dir / "feature_engineered_test.csv",  index=False)
+    test_df.to_csv(processed_dir / "feature_engineered_test.csv", index=False)
 
     print("✅ Feature engineering completed")
     print(f"   Train: {train_df.shape}")

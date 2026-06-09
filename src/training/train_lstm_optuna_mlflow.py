@@ -93,7 +93,7 @@ class LSTMModel(nn.Module):
         )
 
         self.head = nn.Sequential(
-            nn.LayerNorm(hidden_size),       # works on any batch size, including 1
+            nn.LayerNorm(hidden_size),  # works on any batch size, including 1
             nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -102,7 +102,7 @@ class LSTMModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out, _ = self.lstm(x)
-        out = out[:, -1, :]        # last time-step: (batch, hidden_size)
+        out = out[:, -1, :]  # last time-step: (batch, hidden_size)
         return self.head(out).squeeze(-1)
 
 
@@ -118,8 +118,8 @@ def evaluate_model(model: nn.Module, X: np.ndarray, y: np.ndarray):
         preds = model(X_tensor).cpu().numpy()
 
     rmse = float(np.sqrt(mean_squared_error(y, preds)))
-    mae  = float(mean_absolute_error(y, preds))
-    r2   = float(r2_score(y, preds))
+    mae = float(mean_absolute_error(y, preds))
+    r2 = float(r2_score(y, preds))
     return rmse, mae, r2
 
 
@@ -178,8 +178,8 @@ def make_loader(
 
 def load_data():
     train_df = pd.read_csv(PROCESSED_DIR / "feature_engineered_train.csv")
-    test_df  = pd.read_csv(PROCESSED_DIR / "feature_engineered_test.csv")
-    rul_df   = pd.read_csv(PROCESSED_DIR / "rul_clean.csv")
+    test_df = pd.read_csv(PROCESSED_DIR / "feature_engineered_test.csv")
+    rul_df = pd.read_csv(PROCESSED_DIR / "rul_clean.csv")
     return train_df, test_df, rul_df
 
 
@@ -191,12 +191,12 @@ def load_data():
 def objective(trial: optuna.Trial, train_df: pd.DataFrame, feature_cols: list[str]):
 
     # ---- Hyperparameter search space ----
-    seq_len     = trial.suggest_int("seq_len", 20, 50)
+    seq_len = trial.suggest_int("seq_len", 20, 50)
     hidden_size = trial.suggest_categorical("hidden_size", [32, 64, 128, 256])
-    num_layers  = trial.suggest_int("num_layers", 1, 4)
-    dropout     = trial.suggest_float("dropout", 0.1, 0.5)
-    lr          = trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True)
-    batch_size  = trial.suggest_categorical("batch_size", [32, 64, 128])
+    num_layers = trial.suggest_int("num_layers", 1, 4)
+    dropout = trial.suggest_float("dropout", 0.1, 0.5)
+    lr = trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True)
+    batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
 
     # ---- Data ----
     X_train, X_val, y_train, y_val = create_group_split_sequences(
@@ -221,14 +221,16 @@ def objective(trial: optuna.Trial, train_df: pd.DataFrame, feature_cols: list[st
     EPOCHS = 30
 
     with mlflow.start_run(nested=True):
-        mlflow.log_params({
-            "seq_len": seq_len,
-            "hidden_size": hidden_size,
-            "num_layers": num_layers,
-            "dropout": dropout,
-            "learning_rate": lr,
-            "batch_size": batch_size,
-        })
+        mlflow.log_params(
+            {
+                "seq_len": seq_len,
+                "hidden_size": hidden_size,
+                "num_layers": num_layers,
+                "dropout": dropout,
+                "learning_rate": lr,
+                "batch_size": batch_size,
+            }
+        )
 
         for epoch in range(EPOCHS):
             model.train()
@@ -246,7 +248,9 @@ def objective(trial: optuna.Trial, train_df: pd.DataFrame, feature_cols: list[st
             train_loss = epoch_loss / len(X_train)
             val_rmse, _, _ = evaluate_model(model, X_val, y_val)
 
-            mlflow.log_metrics({"train_loss": train_loss, "val_rmse": val_rmse}, step=epoch)
+            mlflow.log_metrics(
+                {"train_loss": train_loss, "val_rmse": val_rmse}, step=epoch
+            )
 
             trial.report(val_rmse, epoch)
             if trial.should_prune():
@@ -298,18 +302,20 @@ def train_final_model(
         mode="min",
         factor=0.5,
         patience=5,
-        #verbose=True,
+        # verbose=True,
     )
 
-    best_rmse  = float("inf")
+    best_rmse = float("inf")
     best_state = None
-    patience   = 10
-    counter    = 0
-    history    = []   # for the training curve artifact
+    patience = 10
+    counter = 0
+    history = []  # for the training curve artifact
 
     EPOCHS = 100
 
-    print(f"\nFinal training (up to {EPOCHS} epochs, early stopping patience={patience})")
+    print(
+        f"\nFinal training (up to {EPOCHS} epochs, early stopping patience={patience})"
+    )
 
     for epoch in range(EPOCHS):
         model.train()
@@ -328,15 +334,17 @@ def train_final_model(
         val_rmse, _, _ = evaluate_model(model, X_val, y_val)
         current_lr = optimizer.param_groups[0]["lr"]
 
-        history.append({
-            "epoch": epoch + 1,
-            "train_loss": round(train_loss, 4),
-            "val_rmse": round(val_rmse, 4),
-            "lr": current_lr,
-        })
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "train_loss": round(train_loss, 4),
+                "val_rmse": round(val_rmse, 4),
+                "lr": current_lr,
+            }
+        )
 
         print(
-            f"Epoch {epoch+1:3d} | "
+            f"Epoch {epoch + 1:3d} | "
             f"Train Loss: {train_loss:10.2f} | "
             f"Val RMSE: {val_rmse:.4f} | "
             f"LR: {current_lr:.2e}"
@@ -345,14 +353,14 @@ def train_final_model(
         scheduler.step(val_rmse)
 
         if val_rmse < best_rmse:
-            best_rmse  = val_rmse
+            best_rmse = val_rmse
             best_state = copy.deepcopy(model.state_dict())
-            counter    = 0
+            counter = 0
         else:
             counter += 1
 
         if counter >= patience:
-            print(f"Early stopping at epoch {epoch+1}")
+            print(f"Early stopping at epoch {epoch + 1}")
             break
 
     model.load_state_dict(best_state)
@@ -378,8 +386,7 @@ def run_lstm_pipeline(n_trials: int = 30):
     train_df, test_df, rul_df = load_data()
 
     feature_cols = [
-        col for col in train_df.columns
-        if col not in ["engine_id", "cycle", "rul"]
+        col for col in train_df.columns if col not in ["engine_id", "cycle", "rul"]
     ]
 
     # ---- Optuna study ----
@@ -430,10 +437,10 @@ def run_lstm_pipeline(n_trials: int = 30):
     with open(MODEL_DIR / "lstm_config.json", "w") as f:
         json.dump(
             {
-                "seq_len":     best_params["seq_len"],
+                "seq_len": best_params["seq_len"],
                 "hidden_size": best_params["hidden_size"],
-                "num_layers":  best_params["num_layers"],
-                "dropout":     best_params["dropout"],
+                "num_layers": best_params["num_layers"],
+                "dropout": best_params["dropout"],
             },
             f,
             indent=4,
@@ -450,7 +457,10 @@ def run_lstm_pipeline(n_trials: int = 30):
         # Log epoch-level metrics for the UI chart view
         for row in history:
             mlflow.log_metrics(
-                {"final_train_loss": row["train_loss"], "final_val_rmse": row["val_rmse"]},
+                {
+                    "final_train_loss": row["train_loss"],
+                    "final_val_rmse": row["val_rmse"],
+                },
                 step=row["epoch"],
             )
 

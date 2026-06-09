@@ -43,17 +43,11 @@ def load_data(
 
     processed_dir = Path(processed_dir)
 
-    train_df = pd.read_csv(
-        processed_dir / "feature_engineered_train.csv"
-    )
+    train_df = pd.read_csv(processed_dir / "feature_engineered_train.csv")
 
-    test_df = pd.read_csv(
-        processed_dir / "feature_engineered_test.csv"
-    )
+    test_df = pd.read_csv(processed_dir / "feature_engineered_test.csv")
 
-    rul_df = pd.read_csv(
-        processed_dir / "rul_clean.csv"
-    )
+    rul_df = pd.read_csv(processed_dir / "rul_clean.csv")
 
     return train_df, test_df, rul_df
 
@@ -82,15 +76,11 @@ def create_group_split(
     train_subset = train_df.iloc[train_idx]
     val_subset = train_df.iloc[val_idx]
 
-    X_train = train_subset.drop(
-        columns=["engine_id", "rul"]
-    )
+    X_train = train_subset.drop(columns=["engine_id", "rul"])
 
     y_train = train_subset["rul"]
 
-    X_val = val_subset.drop(
-        columns=["engine_id", "rul"]
-    )
+    X_val = val_subset.drop(columns=["engine_id", "rul"])
 
     y_val = val_subset["rul"]
 
@@ -105,15 +95,9 @@ def create_test_set(
     Create official NASA test set.
     """
 
-    test_last = (
-        test_df.groupby("engine_id")
-        .last()
-        .reset_index()
-    )
+    test_last = test_df.groupby("engine_id").last().reset_index()
 
-    X_test = test_last.drop(
-        columns=["engine_id"]
-    )
+    X_test = test_last.drop(columns=["engine_id"])
 
     y_test = rul_df["rul"]
 
@@ -184,7 +168,6 @@ def objective(
     }
 
     with mlflow.start_run(nested=True):
-
         model = XGBRegressor(**params)
 
         model.fit(
@@ -234,13 +217,9 @@ def tune_model(
 ):
     """Run Optuna tuning."""
 
-    study = optuna.create_study(
-        direction="minimize"
-    )
+    study = optuna.create_study(direction="minimize")
 
-    with mlflow.start_run(
-        run_name="xgboost_optuna"
-    ):
+    with mlflow.start_run(run_name="xgboost_optuna"):
         study.optimize(
             lambda trial: objective(
                 trial,
@@ -252,9 +231,7 @@ def tune_model(
             n_trials=n_trials,
         )
 
-        mlflow.log_params(
-            study.best_params
-        )
+        mlflow.log_params(study.best_params)
 
         mlflow.log_metric(
             "best_rmse",
@@ -313,6 +290,7 @@ def evaluate_test(
 
     return metrics
 
+
 def save_model(
     model,
     output_dir: Path | str = MODEL_DIR,
@@ -338,23 +316,13 @@ def run_tuning_pipeline(
     n_trials: int = 30,
 ):
 
-    mlflow.set_tracking_uri(
-        str(MLRUNS_DIR.resolve())
-    )
+    mlflow.set_tracking_uri(str(MLRUNS_DIR.resolve()))
 
-    mlflow.set_experiment(
-        experiment_name
-    )
+    mlflow.set_experiment(experiment_name)
 
-    train_df, test_df, rul_df = load_data(
-        processed_dir
-    )
+    train_df, test_df, rul_df = load_data(processed_dir)
 
-    X_train, X_val, y_train, y_val = (
-        create_group_split(
-            train_df
-        )
-    )
+    X_train, X_val, y_train, y_val = create_group_split(train_df)
 
     X_test, y_test = create_test_set(
         test_df,
@@ -395,26 +363,17 @@ def run_tuning_pipeline(
             indent=4,
         )
 
-    with mlflow.start_run(
-        run_name="best_xgb"
-    ):
+    with mlflow.start_run(run_name="best_xgb"):
+        mlflow.log_params(study.best_params)
 
-        mlflow.log_params(
-            study.best_params
-        )
-
-        mlflow.log_metrics(
-            metrics
-        )
+        mlflow.log_metrics(metrics)
 
         mlflow.xgboost.log_model(
             final_model,
             name="model",
         )
 
-    pd.DataFrame(
-        study.trials_dataframe()
-    ).to_csv(
+    pd.DataFrame(study.trials_dataframe()).to_csv(
         MODEL_DIR / "xgb_optuna_trials.csv",
         index=False,
     )

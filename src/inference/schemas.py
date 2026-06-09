@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 # Sensor reading — one row of raw sensor data for a single engine
 # ---------------------------------------------------------------------------
 
+
 class SensorReading(BaseModel):
     """
     One cycle of raw sensor readings for a single engine.
@@ -22,7 +23,7 @@ class SensorReading(BaseModel):
     """
 
     engine_id: int = Field(..., ge=1, description="Engine unit number")
-    cycle: int     = Field(..., ge=1, description="Operational cycle index")
+    cycle: int = Field(..., ge=1, description="Operational cycle index")
 
     # Operational settings
     setting_1: float
@@ -30,15 +31,15 @@ class SensorReading(BaseModel):
     setting_3: float
 
     # Sensor measurements
-    sensor_1:  float
-    sensor_2:  float
-    sensor_3:  float
-    sensor_4:  float
-    sensor_5:  float
-    sensor_6:  float
-    sensor_7:  float
-    sensor_8:  float
-    sensor_9:  float
+    sensor_1: float
+    sensor_2: float
+    sensor_3: float
+    sensor_4: float
+    sensor_5: float
+    sensor_6: float
+    sensor_7: float
+    sensor_8: float
+    sensor_9: float
     sensor_10: float
     sensor_11: float
     sensor_12: float
@@ -60,15 +61,15 @@ class SensorReading(BaseModel):
                 "setting_1": -0.0007,
                 "setting_2": -0.0004,
                 "setting_3": 100.0,
-                "sensor_1":  518.67,
-                "sensor_2":  641.82,
-                "sensor_3":  1589.70,
-                "sensor_4":  1400.60,
-                "sensor_5":  14.62,
-                "sensor_6":  21.61,
-                "sensor_7":  554.36,
-                "sensor_8":  2388.02,
-                "sensor_9":  9046.19,
+                "sensor_1": 518.67,
+                "sensor_2": 641.82,
+                "sensor_3": 1589.70,
+                "sensor_4": 1400.60,
+                "sensor_5": 14.62,
+                "sensor_6": 21.61,
+                "sensor_7": 554.36,
+                "sensor_8": 2388.02,
+                "sensor_9": 9046.19,
                 "sensor_10": 1.30,
                 "sensor_11": 47.47,
                 "sensor_12": 521.66,
@@ -90,6 +91,7 @@ class SensorReading(BaseModel):
 # Multi-cycle request — a sequence of readings for the LSTM endpoint
 # ---------------------------------------------------------------------------
 
+
 class SequenceRequest(BaseModel):
     """
     An ordered list of sensor readings for one engine.
@@ -108,6 +110,7 @@ class SequenceRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Prediction responses
 # ---------------------------------------------------------------------------
+
 
 class XGBPrediction(BaseModel):
     """Response from the XGBoost endpoint."""

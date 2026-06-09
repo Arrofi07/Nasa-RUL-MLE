@@ -30,7 +30,7 @@ from pathlib import Path
 
 # The columns the feature pipeline keeps, in the exact order XGBoost expects.
 # This list is written to disk by export_artifacts.py after training.
-#_FEATURE_COLS_FILE = "models/feature_cols.txt"
+# _FEATURE_COLS_FILE = "models/feature_cols.txt"
 
 
 def _load_feature_cols(feature_cols_path: str | Path) -> list[str]:
@@ -55,10 +55,10 @@ class InferencePipeline:
         seq_len: int = 41,
     ) -> None:
         self.preprocess_scaler = joblib.load(preprocess_scaler_path)
-        self.feature_scaler    = joblib.load(feature_scaler_path)
-        self.feature_cols      = _load_feature_cols(feature_cols_path)
-        self.rolling_window    = rolling_window
-        self.seq_len           = seq_len
+        self.feature_scaler = joblib.load(feature_scaler_path)
+        self.feature_cols = _load_feature_cols(feature_cols_path)
+        self.rolling_window = rolling_window
+        self.seq_len = seq_len
 
         # Columns scaled by preprocess scaler (settings + sensors that survive)
         # We reconstruct this from the scaler's own feature_names_in_ attribute.
@@ -97,7 +97,8 @@ class InferencePipeline:
         """Keep only the base features selected by correlation threshold."""
         # base features = feature_cols minus the _rolling_mean / _diff variants
         base = [
-            c for c in self.feature_cols
+            c
+            for c in self.feature_cols
             if not c.endswith("_rolling_mean") and not c.endswith("_diff")
         ]
         available = [c for c in base if c in df.columns]
@@ -127,12 +128,7 @@ class InferencePipeline:
         for col in base_features:
             if col not in df.columns:
                 continue
-            df[f"{col}_diff"] = (
-                df.groupby("engine_id")[col]
-                .diff()
-                .fillna(0)
-                .round(3)
-            )
+            df[f"{col}_diff"] = df.groupby("engine_id")[col].diff().fillna(0).round(3)
         return df
 
     def _apply_feature_scaler(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -144,7 +140,8 @@ class InferencePipeline:
     def _build_feature_matrix(self, df: pd.DataFrame) -> pd.DataFrame:
         """Run steps 3-6 of the pipeline on an already-preprocess-scaled df."""
         base_features = [
-            c for c in self.feature_cols
+            c
+            for c in self.feature_cols
             if not c.endswith("_rolling_mean") and not c.endswith("_diff")
         ]
 
@@ -195,7 +192,7 @@ class InferencePipeline:
         n, f = vals.shape
 
         if n >= self.seq_len:
-            seq = vals[-self.seq_len:]
+            seq = vals[-self.seq_len :]
         else:
             pad = np.zeros((self.seq_len - n, f), dtype=np.float32)
             seq = np.vstack([pad, vals])

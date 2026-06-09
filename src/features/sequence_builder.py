@@ -11,29 +11,16 @@ def create_sequences(
     targets = []
 
     for engine_id in df["engine_id"].unique():
+        engine_data = df[df["engine_id"] == engine_id]
 
-        engine_data = df[
-            df["engine_id"] == engine_id
-        ]
+        X_engine = engine_data[feature_cols].values
 
-        X_engine = engine_data[
-            feature_cols
-        ].values
+        y_engine = engine_data["rul"].values
 
-        y_engine = engine_data[
-            "rul"
-        ].values
+        for i in range(len(X_engine) - seq_len):
+            sequences.append(X_engine[i : i + seq_len])
 
-        for i in range(
-            len(X_engine) - seq_len
-        ):
-            sequences.append(
-                X_engine[i:i + seq_len]
-            )
-
-            targets.append(
-                y_engine[i + seq_len]
-            )
+            targets.append(y_engine[i + seq_len])
 
     return (
         np.array(sequences),
@@ -53,12 +40,7 @@ def create_group_split_sequences(
         random_state=42,
     )
 
-    train_idx, val_idx = next(
-        splitter.split(
-            train_df,
-            groups=train_df["engine_id"]
-        )
-    )
+    train_idx, val_idx = next(splitter.split(train_df, groups=train_df["engine_id"]))
 
     train_split = train_df.iloc[train_idx]
     val_split = train_df.iloc[val_idx]
