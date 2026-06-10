@@ -21,3 +21,4 @@ models/*.pth
 models/*.ckpt
 
 *.log
+*.zip
