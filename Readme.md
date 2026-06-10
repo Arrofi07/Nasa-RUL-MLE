@@ -497,4 +497,4 @@ This architecture separates the frontend from the inference service, making the 
 - [x] FastAPI inference API
 - [x] Unit and integration tests
 - [x] Dockerfile and container deployment
-- [ ] CI/CD with GitHub Actions
+- [x] CI/CD with GitHub Actions
