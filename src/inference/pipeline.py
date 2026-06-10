@@ -158,9 +158,9 @@ class InferencePipeline:
     # Public transform methods
     # ------------------------------------------------------------------
 
-    def transform_xgb(self, readings: list[dict]) -> np.ndarray:
+    def transform_tree(self, readings: list[dict]) -> np.ndarray:
         """
-        Transform a list of sensor dicts into an XGBoost feature matrix.
+        Transform a list of sensor dicts into a tree model feature matrix.
 
         For a single-row prediction pass a list with one dict.
         The last row is used as the prediction point (mirrors how the
@@ -173,7 +173,7 @@ class InferencePipeline:
 
         X.insert(0, "cycle", df["cycle"].iloc[-1])
 
-        # XGBoost predicts on the final cycle row
+        # Tree models predict on the final cycle row
         return X.iloc[[-1]].values
 
     def transform_lstm(self, readings: list[dict]) -> np.ndarray:

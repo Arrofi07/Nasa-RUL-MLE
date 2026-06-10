@@ -1,9 +1,9 @@
 """
-⚡ XGBoost Hyperparameter Tuning with Optuna + MLflow
+⚡ LightGBM Hyperparameter Tuning with Optuna + MLflow
 
 - Reads feature-engineered datasets
 - Uses GroupShuffleSplit to avoid engine leakage
-- Tunes XGBoost with Optuna
+- Tunes LightGBM with Optuna
 - Tracks experiments in MLflow
 - Logs best model and metrics
 - Saves Optuna study results
@@ -13,7 +13,7 @@
 from pathlib import Path
 
 import mlflow
-import mlflow.xgboost
+import mlflow.lightgbm
 import numpy as np
 import optuna
 import pandas as pd
@@ -26,7 +26,7 @@ from sklearn.metrics import (
     r2_score,
 )
 from sklearn.model_selection import GroupShuffleSplit
-from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 
 
 PROCESSED_DIR = Path("data/processed")
@@ -104,6 +104,8 @@ def create_test_set(
     return X_test, y_test
 
 
+import lightgbm as lgb
+
 def objective(
     trial,
     X_train,
@@ -111,70 +113,78 @@ def objective(
     X_val,
     y_val,
 ):
-    """Optuna objective."""
 
     params = {
-        "n_estimators": trial.suggest_int(
-            "n_estimators",
-            200,
-            1000,
+
+        "objective":"regression",
+        "metric":"rmse",
+
+        "learning_rate":trial.suggest_float(
+            "learning_rate",
+            1e-3,
+            0.2,
+            log=True,
         ),
-        "max_depth": trial.suggest_int(
+
+        "num_leaves":trial.suggest_int(
+            "num_leaves",
+            16,
+            256,
+        ),
+
+        "max_depth":trial.suggest_int(
             "max_depth",
             3,
-            10,
+            12,
         ),
-        "learning_rate": trial.suggest_float(
-            "learning_rate",
-            0.01,
-            0.3,
-            log=True,
+
+        "min_child_samples":trial.suggest_int(
+            "min_child_samples",
+            5,
+            100,
         ),
-        "subsample": trial.suggest_float(
-            "subsample",
-            0.5,
+
+        "feature_fraction":trial.suggest_float(
+            "feature_fraction",
+            0.6,
             1.0,
         ),
-        "colsample_bytree": trial.suggest_float(
-            "colsample_bytree",
-            0.5,
+
+        "bagging_fraction":trial.suggest_float(
+            "bagging_fraction",
+            0.6,
             1.0,
         ),
-        "min_child_weight": trial.suggest_int(
-            "min_child_weight",
-            1,
+
+        "bagging_freq":1,
+
+        "lambda_l1":trial.suggest_float(
+            "lambda_l1",
+            1e-8,
             10,
-        ),
-        "gamma": trial.suggest_float(
-            "gamma",
-            0.0,
-            5.0,
-        ),
-        "reg_alpha": trial.suggest_float(
-            "reg_alpha",
-            1e-8,
-            10.0,
             log=True,
         ),
-        "reg_lambda": trial.suggest_float(
-            "reg_lambda",
+
+        "lambda_l2":trial.suggest_float(
+            "lambda_l2",
             1e-8,
-            10.0,
+            10,
             log=True,
         ),
-        "random_state": 42,
-        "n_jobs": -1,
-        "tree_method": "hist",
     }
 
     with mlflow.start_run(nested=True):
-        model = XGBRegressor(**params)
+        model = LGBMRegressor(
+            **params,
+            random_state=42,
+            n_jobs=-1,
+        )
 
         model.fit(
             X_train,
             y_train,
             eval_set=[(X_val, y_val)],
-            verbose=False,
+            #verbose=False,
         )
 
         preds = model.predict(X_val)
@@ -219,7 +229,7 @@ def tune_model(
 
     study = optuna.create_study(direction="minimize")
 
-    with mlflow.start_run(run_name="xgboost_optuna"):
+    with mlflow.start_run(run_name="lightgbm_optuna"):
         study.optimize(
             lambda trial: objective(
                 trial,
@@ -248,7 +258,7 @@ def train_final_model(
 ):
     """Train final model."""
 
-    model = XGBRegressor(
+    model = LGBMRegressor(
         **study.best_params,
         random_state=42,
         n_jobs=-1,
@@ -298,7 +308,7 @@ def save_model(
 
     output_dir = Path(output_dir)
 
-    model_path = output_dir / "best_xgb.pkl"
+    model_path = output_dir / "best_lgbm.pkl"
 
     joblib.dump(
         model,
@@ -334,7 +344,7 @@ def run_tuning_pipeline(
     y_train,
     X_val,
     y_val,
-)
+    )
 
     X_full = train_df.drop(
         columns=["engine_id", "rul"]
@@ -357,7 +367,7 @@ def run_tuning_pipeline(
     )
 
     with open(
-        MODEL_DIR / "best_params_xgb.json",
+        MODEL_DIR / "best_params_lgbm.json",
         "w",
     ) as f:
         json.dump(
@@ -366,18 +376,18 @@ def run_tuning_pipeline(
             indent=4,
         )
 
-    with mlflow.start_run(run_name="best_xgb"):
+    with mlflow.start_run(run_name="best_lgbm"):
         mlflow.log_params(study.best_params)
 
         mlflow.log_metrics(metrics)
 
-        mlflow.xgboost.log_model(
+        mlflow.lightgbm.log_model(
             final_model,
             name="model",
         )
 
     pd.DataFrame(study.trials_dataframe()).to_csv(
-        MODEL_DIR / "xgb_optuna_trials.csv",
+        MODEL_DIR / "lgbm_optuna_trials.csv",
         index=False,
     )
 

@@ -121,6 +121,15 @@ class XGBPrediction(BaseModel):
     model: str = "xgboost"
 
 
+class LGBMPrediction(BaseModel):
+    """Response from the LightGBM endpoint."""
+
+    engine_id: int
+    cycle: int
+    predicted_rul: float = Field(..., description="Predicted RUL in cycles")
+    model: str = "lgbm"
+
+
 class LSTMPrediction(BaseModel):
     """Response from the LSTM endpoint."""
 

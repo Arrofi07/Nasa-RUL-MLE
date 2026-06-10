@@ -24,6 +24,7 @@ from src.inference.schemas import (
     SequenceRequest,
     SensorReading,
     XGBPrediction,
+    LGBMPrediction,
 )
 
 
@@ -143,6 +144,34 @@ def predict_xgb(
         predicted_rul=round(rul, 2),
     )
 
+@app.post(
+    "/predict/lgbm",
+    response_model=LGBMPrediction,
+    summary="LightGBM RUL prediction (single cycle)",
+    tags=["Prediction"],
+)
+def predict_lgbm(
+    payload: SensorReading,
+    registry: ModelRegistry = Depends(get_registry),
+) -> LGBMPrediction:
+    """
+    Predict RUL for a **single cycle** using LightGBM.
+
+    Rolling/diff features will be zero since there is no history.
+    For better accuracy send multiple cycles to `/predict/lgbm/batch`.
+    """
+    readings = [payload.model_dump()]
+    try:
+        rul = registry.predict_lgbm(readings)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return LGBMPrediction(
+        engine_id=payload.engine_id,
+        cycle=payload.cycle,
+        predicted_rul=round(rul, 2),
+    )
+
 
 @app.post(
     "/predict/xgb/batch",
@@ -168,6 +197,35 @@ def predict_xgb_batch(
 
     last = payload.readings[-1]
     return XGBPrediction(
+        engine_id=last.engine_id,
+        cycle=last.cycle,
+        predicted_rul=round(rul, 2),
+    )
+
+@app.post(
+    "/predict/lgbm/batch",
+    response_model=LGBMPrediction,
+    summary="LightGBM RUL prediction (with history)",
+    tags=["Prediction"],
+)
+def predict_lgbm_batch(
+    payload: SequenceRequest,
+    registry: ModelRegistry = Depends(get_registry),
+) -> LGBMPrediction:
+    """
+    Predict RUL from an **ordered history of cycles** using LightGBM.
+
+    Send readings oldest → newest. At least 5 cycles recommended so
+    rolling-mean features are meaningful. Prediction is for the last reading.
+    """
+    readings = [r.model_dump() for r in payload.readings]
+    try:
+        rul = registry.predict_lgbm(readings)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    last = payload.readings[-1]
+    return LGBMPrediction(
         engine_id=last.engine_id,
         cycle=last.cycle,
         predicted_rul=round(rul, 2),

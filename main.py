@@ -43,7 +43,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "src.api.app:app",
         host="0.0.0.0",
-        port=8000,
+        port=int(os.environ.get("PORT", 8000)),
         reload=False,  # never enable reload — fork+PyTorch segfaults on macOS
         workers=1,  # single worker avoids any inter-process torch issues
         log_level="info",

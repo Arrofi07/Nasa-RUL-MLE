@@ -70,12 +70,14 @@ class ModelRegistry:
     def __init__(
         self,
         xgb_model,
+        lgbm_model,
         lstm_model: LSTMModel | None,
         pipeline: InferencePipeline,
         lstm_config: dict,
         device: torch.device,
     ) -> None:
         self.xgb = xgb_model
+        self.lgbm = lgbm_model
         self.lstm = lstm_model
         self.pipe = pipeline
         self.lstm_config = lstm_config
@@ -87,6 +89,7 @@ class ModelRegistry:
     def from_paths(
         cls,
         xgb_path: str | Path = "models/best_xgb.pkl",
+        lgbm_path: str | Path = "models/best_lgbm.pkl",
         lstm_path: str | Path = "models/best_lstm.pt",
         lstm_config_path: str | Path = "models/lstm_config.json",
         preprocess_scaler_path: str | Path = "models/preprocess_scaler.pkl",
@@ -115,6 +118,15 @@ class ModelRegistry:
                 "Run the tuning script first: python -m src.training.tune_xgb_optuna_mlflow"
             )
         xgb_model = joblib.load(xgb_path)
+
+        # --- LightGBM (required) ---
+        lgbm_path = Path(lgbm_path)
+        if not lgbm_path.exists():
+            raise FileNotFoundError(
+                f"LightGBM model not found at {lgbm_path}. "
+                "Run the tuning script first: python -m src.training.tune_lgbm_optuna_mlflow"
+            )
+        lgbm_model = joblib.load(lgbm_path)
 
         # --- LSTM config ---
         with open(lstm_config_path) as f:
@@ -161,7 +173,7 @@ class ModelRegistry:
             #    set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
             # )
 
-        return cls(xgb_model, lstm_model, pipeline, lstm_config, device)
+        return cls(xgb_model, lgbm_model, lstm_model, pipeline, lstm_config, device)
 
     # ------------------------------------------------------------------
     # Status helpers
@@ -171,6 +183,7 @@ class ModelRegistry:
     def models_loaded(self) -> dict[str, bool]:
         return {
             "xgboost": self.xgb is not None,
+            "lgbm": self.lgbm is not None,
             "lstm": self.lstm is not None,
         }
 
@@ -189,6 +202,20 @@ class ModelRegistry:
         X = self.pipe.transform_xgb(readings)
 
         pred = float(self.xgb.predict(X)[0])
+        # Clip to [0, 125] — matches the RUL cap used during training
+        return max(0.0, min(pred, 125.0))
+    
+    def predict_lgbm(self, readings: list[dict]) -> float:
+        """
+        Run LightGBM on a list of sensor reading dicts.
+
+        The last reading in the list is the prediction point.
+        Earlier readings are used only to build rolling / diff features.
+        We recommend sending at least 5 cycles (rolling_window size).
+        """
+        X = self.pipe.transform_lgbm(readings)
+
+        pred = float(self.lgbm.predict(X)[0])
         # Clip to [0, 125] — matches the RUL cap used during training
         return max(0.0, min(pred, 125.0))
 

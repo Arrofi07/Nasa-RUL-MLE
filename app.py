@@ -89,7 +89,16 @@ def predict_xgb_batch(readings: list) -> float | None:
         return r.json()["predicted_rul"]
     except Exception:
         return None
-
+    
+def predict_lgbm_batch(readings: list) -> float | None:
+    try:
+        r = requests.post(
+            f"{API_URL}/predict/lgbm/batch", json={"readings": readings}, timeout=10
+        )
+        r.raise_for_status()
+        return r.json()["predicted_rul"]
+    except Exception:
+        return None
 
 def predict_lstm(readings: list) -> float | None:
     try:
@@ -176,10 +185,12 @@ with tab1:
 
                 with st.spinner("Calling XGBoost…"):
                     xgb_rul = predict_xgb_batch(readings)
+                with st.spinner("Calling LightGBM…"):
+                    lgbm_rul = predict_lgbm_batch(readings)
                 with st.spinner("Calling LSTM…"):
                     lstm_rul = predict_lstm(readings)
 
-                c1, c2, c3 = st.columns(3)
+                c1, c2, c3, c4 = st.columns(4)
                 c1.metric("True RUL", f"{true_rul:.0f} cycles")
                 c2.metric(
                     "XGBoost RUL",
@@ -187,6 +198,11 @@ with tab1:
                     delta=f"{xgb_rul - true_rul:+.1f}" if xgb_rul is not None else None,
                 )
                 c3.metric(
+                    "LightGBM RUL",
+                    f"{lgbm_rul:.1f} cycles" if lgbm_rul is not None else "—",
+                    delta=f"{lgbm_rul - true_rul:+.1f}" if lgbm_rul is not None else None,
+                )
+                c4.metric(
                     "LSTM RUL",
                     f"{lstm_rul:.1f} cycles" if lstm_rul is not None else "—",
                     delta=f"{lstm_rul - true_rul:+.1f}"
@@ -202,6 +218,10 @@ with tab1:
                     results["Model"].append("XGBoost")
                     results["Predicted RUL"].append(xgb_rul)
 
+                if lgbm_rul is not None:
+                    results["Model"].append("LightGBM")
+                    results["Predicted RUL"].append(lgbm_rul)
+
                 if lstm_rul is not None:
                     results["Model"].append("LSTM")
                     results["Predicted RUL"].append(lstm_rul)
@@ -214,6 +234,7 @@ with tab1:
                     color_discrete_map={
                         "True RUL": "gray",
                         "XGBoost": "#1f77b4",
+                        "LightGBM": "#2ca02c",
                         "LSTM": "#ff7f0e",
                     },
                     title=f"Engine {engine_id} — Predicted vs True RUL",
@@ -234,7 +255,7 @@ with tab2:
     )
 
     model_choice = st.radio(
-        "Model to evaluate", ["XGBoost", "LSTM", "Both"], horizontal=True
+        "Model to evaluate", ["XGBoost", "LightGBM", "LSTM", "All"], horizontal=True
     )
 
     if st.button("Run Batch Evaluation", key="batch_eval"):
@@ -254,9 +275,11 @@ with tab2:
                         build_sensor_row(row) for _, row in engine_raw.iterrows()
                     ]
                     row = {"engine_id": eid, "true_rul": true_rul}
-                    if model_choice in ("XGBoost", "Both"):
+                    if model_choice in ("XGBoost", "All"):
                         row["xgb_pred"] = predict_xgb_batch(readings)
-                    if model_choice in ("LSTM", "Both"):
+                    if model_choice in ("LightGBM", "All"):
+                        row["lgbm_pred"] = predict_lgbm_batch(readings)
+                    if model_choice in ("LSTM", "All"):
                         row["lstm_pred"] = predict_lstm(readings)
                     results.append(row)
                     progress.progress(
@@ -278,15 +301,17 @@ with tab2:
                     cols[offset].metric(f"{label} RMSE", f"{rmse:.2f}")
                     cols[offset + 1].metric(f"{label} MAE", f"{mae:.2f}")
 
-                if model_choice in ("XGBoost", "Both"):
+                if model_choice in ("XGBoost", "All"):
                     show_metrics(results_df, "xgb_pred", "XGBoost", mcols, 0)
-                if model_choice in ("LSTM", "Both"):
+                if model_choice in ("LightGBM", "All"):
+                    show_metrics(results_df, "lgbm_pred", "LightGBM", mcols, 0)
+                if model_choice in ("LSTM", "All"):
                     show_metrics(
                         results_df,
                         "lstm_pred",
                         "LSTM",
                         mcols,
-                        2 if model_choice == "Both" else 0,
+                        2 if model_choice == "All" else 0,
                     )
 
                 # Scatter
@@ -300,7 +325,7 @@ with tab2:
                     y1=150,
                     line=dict(color="gray", dash="dash"),
                 )
-                if model_choice in ("XGBoost", "Both") and "xgb_pred" in results_df:
+                if model_choice in ("XGBoost", "All") and "xgb_pred" in results_df:
                     fig.add_trace(
                         go.Scatter(
                             x=results_df["true_rul"],
@@ -310,7 +335,17 @@ with tab2:
                             marker=dict(color="#1f77b4", size=7, opacity=0.7),
                         )
                     )
-                if model_choice in ("LSTM", "Both") and "lstm_pred" in results_df:
+                if model_choice in ("LightGBM", "All") and "lgbm_pred" in results_df:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=results_df["true_rul"],
+                            y=results_df["lgbm_pred"],
+                            mode="markers",
+                            name="LightGBM",
+                            marker=dict(color="#2ca02c", size=7, opacity=0.7),
+                        )
+                    )
+                if model_choice in ("LSTM", "All") and "lstm_pred" in results_df:
                     fig.add_trace(
                         go.Scatter(
                             x=results_df["true_rul"],
@@ -330,7 +365,7 @@ with tab2:
                 # Error distribution
                 st.markdown("#### Prediction Error Distribution")
                 err_data = []
-                if model_choice in ("XGBoost", "Both") and "xgb_pred" in results_df:
+                if model_choice in ("XGBoost", "All") and "xgb_pred" in results_df:
                     err_data.append(
                         go.Histogram(
                             x=(
@@ -341,7 +376,18 @@ with tab2:
                             marker_color="#1f77b4",
                         )
                     )
-                if model_choice in ("LSTM", "Both") and "lstm_pred" in results_df:
+                if model_choice in ("LightGBM", "All") and "lgbm_pred" in results_df:
+                    err_data.append(
+                        go.Histogram(
+                            x=(
+                                results_df["lgbm_pred"] - results_df["true_rul"]
+                            ).dropna(),
+                            name="LightGBM",
+                            opacity=0.7,
+                            marker_color="#2ca02c",
+                        )
+                    )
+                if model_choice in ("LSTM", "All") and "lstm_pred" in results_df:
                     err_data.append(
                         go.Histogram(
                             x=(
