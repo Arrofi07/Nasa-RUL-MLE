@@ -327,6 +327,9 @@ python -m src.training.tune_xgb_optuna_mlflow
 
 # LSTM tuning (tracked in MLflow)
 python -m src.training.train_lstm_optuna_mlflow
+
+# LGBM tuning (tracked in MLflow)
+python -m src.training.tune_lgbm_optuna_mlflow
 ```
 
 ### Export Artifacts (run once after training)
@@ -378,7 +381,7 @@ mlflow ui
 ### Deploy to Railway
 ```bash
 git add .
-git commit -m "prepare railway deployment"
+git commit -m "Fix LightGBM"
 git push origin main
 
 # Deployed with Railway at root https://nasa-rul-mle-production.up.railway.app

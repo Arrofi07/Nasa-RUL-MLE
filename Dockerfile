@@ -2,40 +2,23 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# system deps
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# copy dependency definition first (cache layer)
-COPY pyproject.toml .
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# install package manager
-RUN pip install --no-cache-dir --upgrade pip
+# Copy dependency files first (Docker layer cache: only re-installs if these change)
+COPY pyproject.toml uv.lock ./
 
-# install runtime deps
-RUN pip install --no-cache-dir \
-    numpy==2.4.4 \
-    pandas==2.3.3 \
-    scikit-learn==1.8.0 \
-    xgboost==3.2.0 \
-    lightgbm==4.6.0 \
-    torch==2.11.0 \
-    mlflow==3.11.1 \
-    scipy==1.17.1 \
-    pyarrow==23.0.1 \
-    cloudpickle==3.1.2 \
-    psutil==7.2.2 \
-    tqdm==4.67.3 \
-    fastapi==0.115.12 \
-    uvicorn[standard]==0.34.3 \
-    pydantic==2.11.4 \
-    joblib
+# Install only runtime deps (no dev extras like pytest/ruff in production)
+RUN uv sync --frozen --no-dev
 
-# copy source
+# Copy source
 COPY . .
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["uv", "run", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

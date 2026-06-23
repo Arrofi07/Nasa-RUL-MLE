@@ -21,33 +21,15 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
 
       - name: Install uv
         run: pip install uv
 
       - name: Install dependencies
-        run: |
-          uv pip install --system \
-            numpy==2.4.4 \
-            pandas==2.3.3 \
-            scikit-learn==1.8.0 \
-            xgboost==3.2.0 \
-            torch==2.11.0 \
-            mlflow==3.11.1 \
-            scipy==1.17.1 \
-            pyarrow==23.0.1 \
-            cloudpickle==3.1.2 \
-            psutil==7.2.2 \
-            tqdm==4.67.3 \
-            fastapi==0.115.12 \
-            uvicorn[standard]==0.34.3 \
-            pydantic==2.11.4 \
-            pytest==8.3.5 \
-            pytest-cov==6.1.0 \
-            httpx==0.28.1 \
-            ruff==0.11.8 \
-            mypy==1.15.0
+        run: uv sync --frozen --extra dev
+        # --frozen: fail if uv.lock is out of sync with pyproject.toml (catches drift)
+        # --extra dev: installs pytest, ruff, httpx, etc. declared under [dev]
 
       - name: Ruff
         run: |
