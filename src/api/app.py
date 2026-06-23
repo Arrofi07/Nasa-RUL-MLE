@@ -108,7 +108,7 @@ def health(request: Request) -> HealthResponse:
         error = getattr(request.app.state, "startup_error", "Unknown error")
         return HealthResponse(
             status=f"degraded: {error}",
-            models_loaded={"xgboost": False, "lstm": False},
+            models_loaded={"xgboost": False, "lightgbm": False, "lstm": False},
         )
     return HealthResponse(
         status="ok",

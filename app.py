@@ -29,8 +29,8 @@ warnings.filterwarnings("ignore")
 # Config
 # ---------------------------------------------------------------------------
 
-# API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
-API_URL = os.environ.get("API_URL", "https://nasa-rul-mle-production.up.railway.app")
+API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
+#API_URL = os.environ.get("API_URL", "https://nasa-rul-mle-production.up.railway.app")
 PROCESSED_DIR = "data/processed"
 
 # DROPPED_SENSORS = {"sensor_1", "sensor_5", "sensor_10", "sensor_16", "sensor_18", "sensor_19"}
@@ -170,7 +170,7 @@ with tab1:
                     labels={"cycle": "Cycle", sensor_choice: "Normalised value"},
                 )
                 fig.update_traces(line_color="#1f77b4")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             else:
                 st.info(f"{sensor_choice} was dropped during preprocessing.")
 
@@ -239,7 +239,7 @@ with tab1:
                     },
                     title=f"Engine {engine_id} — Predicted vs True RUL",
                 )
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width='stretch')
 
     except FileNotFoundError as e:
         st.error(f"Processed data not found: {e}\nRun the data pipeline first.")
@@ -360,7 +360,7 @@ with tab2:
                     yaxis_title="Predicted RUL (cycles)",
                     title="Predicted vs True RUL — Test Set",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
                 # Error distribution
                 st.markdown("#### Prediction Error Distribution")
@@ -405,10 +405,10 @@ with tab2:
                     yaxis_title="Count",
                     title="Error Distribution (Predicted − True)",
                 )
-                st.plotly_chart(fig_err, use_container_width=True)
+                st.plotly_chart(fig_err, width='stretch')
 
                 with st.expander("View full results table"):
-                    st.dataframe(results_df.round(2), use_container_width=True)
+                    st.dataframe(results_df.round(2), width='stretch')
 
             except FileNotFoundError as e:
                 st.error(f"Processed data not found: {e}")
@@ -523,7 +523,7 @@ with tab3:
                         )
                     )
                     fig_gauge.update_layout(height=300)
-                    st.plotly_chart(fig_gauge, use_container_width=True)
+                    st.plotly_chart(fig_gauge, width='stretch')
 
                 except requests.HTTPError:
                     st.error(f"API error {r.status_code}: {r.text}")

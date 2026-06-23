@@ -83,6 +83,7 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     """
     from sklearn.preprocessing import StandardScaler
     from xgboost import XGBRegressor
+    from lightgbm import LGBMRegressor
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     # rng = np.random.default_rng(0)
@@ -118,6 +119,16 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     xgb.fit(X_train, y_train)
     joblib.dump(xgb, tmp_path / "best_xgb.pkl")
 
+    # ── LightGBM model ────────────────────────────────────────────────────
+    # LightGBM is trained with cycle as the FIRST column (matching pipeline.py
+    # which does X.insert(0, "cycle", ...) before returning to the model).
+    lgbm_cols = ["cycle"] + full_feat_cols
+    X_train = fe_train[lgbm_cols].values
+    y_train = fe_train["rul"].values
+    lgbm = LGBMRegressor(n_estimators=10, max_depth=2, random_state=0)
+    lgbm.fit(X_train, y_train)
+    joblib.dump(lgbm, tmp_path / "best_lgbm.pkl")
+
     # ── LSTM config (no weights → lstm stays None) ───────────────────────
     config = {"seq_len": SEQ_LEN, "hidden_size": 16, "num_layers": 1, "dropout": 0.1}
     with open(tmp_path / "lstm_config.json", "w") as f:
@@ -143,6 +154,7 @@ def registry(artifacts):
 
     return ModelRegistry.from_paths(
         xgb_path=artifacts / "best_xgb.pkl",
+        lgbm_path=artifacts / "best_lgbm.pkl",
         lstm_path=artifacts / "best_lstm.pt",  # doesn't exist → lstm=None
         lstm_config_path=artifacts / "lstm_config.json",
         preprocess_scaler_path=artifacts / "preprocess_scaler.pkl",
@@ -177,6 +189,20 @@ class TestInferencePipelineTransforms:
         n_feat = len(mock_pipeline.feature_cols) + 1
         assert X.shape == (1, n_feat), f"Expected (1, {n_feat}), got {X.shape}"
 
+    def test_transform_lgbm_shape(self, mock_pipeline):
+        readings = [_sensor_row(cycle=c) for c in range(1, 8)]
+        X = mock_pipeline.transform_lgbm(readings)
+        # LightGBM uses feature_cols + cycle prepended = n_feat + 1
+        n_feat = len(mock_pipeline.feature_cols) + 1
+        assert X.shape == (1, n_feat), f"Expected (1, {n_feat}), got {X.shape}"
+
+    def test_transform_lgbm_uses_last_row(self, mock_pipeline):
+        readings_a = [_sensor_row(engine_id=1, cycle=c) for c in range(1, 6)]
+        readings_b = [_sensor_row(engine_id=2, cycle=c) for c in range(1, 6)]
+        Xa = mock_pipeline.transform_lgbm(readings_a)
+        Xb = mock_pipeline.transform_lgbm(readings_b)
+        assert Xa.shape == Xb.shape
+
     def test_transform_lstm_shape_enough_cycles(self, mock_pipeline):
         readings = [_sensor_row(cycle=c) for c in range(1, SEQ_LEN + 3)]
         seq = mock_pipeline.transform_lstm(readings)
@@ -209,6 +235,9 @@ class TestModelRegistry:
     def test_xgb_loaded(self, registry):
         assert registry.models_loaded["xgboost"] is True
 
+    def test_lgbm_loaded(self, registry):
+        assert registry.models_loaded["lightgbm"] is True
+
     def test_lstm_none_without_weights(self, registry):
         assert registry.models_loaded["lstm"] is False
 
@@ -222,6 +251,16 @@ class TestModelRegistry:
         result = registry.predict_xgb(readings)
         assert 0.0 <= result <= 125.0
 
+    def test_predict_lgbm_returns_float(self, registry):
+        readings = [_sensor_row(cycle=c) for c in range(1, 8)]
+        result = registry.predict_lgbm(readings)
+        assert isinstance(result, float)
+
+    def test_predict_lgbm_clipped_to_0_125(self, registry):
+        readings = [_sensor_row(cycle=c) for c in range(1, 8)]
+        result = registry.predict_lgbm(readings)
+        assert 0.0 <= result <= 125.0
+
     def test_predict_lstm_raises_without_weights(self, registry):
         readings = [_sensor_row(cycle=c) for c in range(1, 8)]
         with pytest.raises(RuntimeError, match="LSTM model weights not found"):
@@ -233,6 +272,7 @@ class TestModelRegistry:
         with pytest.raises(FileNotFoundError):
             ModelRegistry.from_paths(
                 xgb_path=artifacts / "nonexistent.pkl",
+                lgbm_path=artifacts / "best_lgbm.pkl",
                 lstm_path=artifacts / "best_lstm.pt",
                 lstm_config_path=artifacts / "lstm_config.json",
                 preprocess_scaler_path=artifacts / "preprocess_scaler.pkl",
@@ -264,6 +304,9 @@ class TestFastAPIEndpoints:
 
     def test_health_shows_xgb_loaded(self, client):
         assert client.get("/health").json()["models_loaded"]["xgboost"] is True
+
+    def test_health_shows_lgbm_loaded(self, client):
+        assert client.get("/health").json()["models_loaded"]["lightgbm"] is True
 
     def test_predict_xgb_returns_200(self, client):
         assert client.post("/predict/xgb", json=_sensor_row()).status_code == 200
@@ -303,6 +346,46 @@ class TestFastAPIEndpoints:
     def test_predict_xgb_batch_empty_readings_returns_422(self, client):
         assert (
             client.post("/predict/xgb/batch", json={"readings": []}).status_code == 422
+        )
+
+    def test_predict_lgbm_returns_200(self, client):
+        assert client.post("/predict/lgbm", json=_sensor_row()).status_code == 200
+
+    def test_predict_lgbm_response_schema(self, client):
+        body = client.post("/predict/lgbm", json=_sensor_row()).json()
+        assert "predicted_rul" in body
+        assert "engine_id" in body
+        assert "cycle" in body
+        assert "model" in body
+
+    def test_predict_lgbm_rul_in_valid_range(self, client):
+        rul = client.post("/predict/lgbm", json=_sensor_row()).json()["predicted_rul"]
+        assert 0.0 <= rul <= 125.0
+
+    def test_predict_lgbm_wrong_method_returns_405(self, client):
+        assert client.get("/predict/lgbm").status_code == 405
+
+    def test_predict_lgbm_missing_field_returns_422(self, client):
+        bad = _sensor_row()
+        del bad["sensor_1"]
+        assert client.post("/predict/lgbm", json=bad).status_code == 422
+
+    def test_predict_lgbm_batch_returns_200(self, client):
+        readings = [_sensor_row(cycle=c) for c in range(1, 8)]
+        assert (
+            client.post("/predict/lgbm/batch", json={"readings": readings}).status_code
+            == 200
+        )
+
+    def test_predict_lgbm_batch_uses_last_reading(self, client):
+        readings = [_sensor_row(engine_id=1, cycle=c) for c in range(1, 6)]
+        body = client.post("/predict/lgbm/batch", json={"readings": readings}).json()
+        assert body["engine_id"] == 1
+        assert body["cycle"] == 5
+
+    def test_predict_lgbm_batch_empty_readings_returns_422(self, client):
+        assert (
+            client.post("/predict/lgbm/batch", json={"readings": []}).status_code == 422
         )
 
     def test_predict_lstm_without_weights_returns_503(self, client):

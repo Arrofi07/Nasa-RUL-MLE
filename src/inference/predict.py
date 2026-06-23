@@ -183,7 +183,7 @@ class ModelRegistry:
     def models_loaded(self) -> dict[str, bool]:
         return {
             "xgboost": self.xgb is not None,
-            "lgbm": self.lgbm is not None,
+            "lightgbm": self.lgbm is not None,
             "lstm": self.lstm is not None,
         }
 
@@ -204,7 +204,7 @@ class ModelRegistry:
         pred = float(self.xgb.predict(X)[0])
         # Clip to [0, 125] — matches the RUL cap used during training
         return max(0.0, min(pred, 125.0))
-    
+
     def predict_lgbm(self, readings: list[dict]) -> float:
         """
         Run LightGBM on a list of sensor reading dicts.

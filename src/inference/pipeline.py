@@ -158,9 +158,9 @@ class InferencePipeline:
     # Public transform methods
     # ------------------------------------------------------------------
 
-    def transform_tree(self, readings: list[dict]) -> np.ndarray:
+    def _transform_tree(self, readings: list[dict]) -> np.ndarray:
         """
-        Transform a list of sensor dicts into a tree model feature matrix.
+        Internal: transform a list of sensor dicts into a tree model feature matrix.
 
         For a single-row prediction pass a list with one dict.
         The last row is used as the prediction point (mirrors how the
@@ -175,6 +175,30 @@ class InferencePipeline:
 
         # Tree models predict on the final cycle row
         return X.iloc[[-1]].values
+
+    def transform_xgb(self, readings: list[dict]) -> np.ndarray:
+        """
+        Transform a list of sensor dicts into an XGBoost feature matrix.
+
+        For a single-row prediction pass a list with one dict.
+        The last row is used as the prediction point (mirrors how the
+        training test set takes the last cycle of each engine).
+        """
+        return self._transform_tree(readings)
+
+    def transform_lgbm(self, readings: list[dict]) -> np.ndarray:
+        """
+        Transform a list of sensor dicts into a LightGBM feature matrix.
+
+        Identical transformation to XGBoost — both tree models share the
+        same feature pipeline.
+        """
+        return self._transform_tree(readings)
+
+    # Keep transform_tree as an alias for backwards compatibility
+    def transform_tree(self, readings: list[dict]) -> np.ndarray:
+        """Alias for transform_xgb / transform_lgbm. Prefer the named methods."""
+        return self._transform_tree(readings)
 
     def transform_lstm(self, readings: list[dict]) -> np.ndarray:
         """
