@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir \
     pandas==2.3.3 \
     scikit-learn==1.8.0 \
     xgboost==3.2.0 \
+    lightgbm==4.6.0 \
     torch==2.11.0 \
     mlflow==3.11.1 \
     scipy==1.17.1 \

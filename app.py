@@ -291,7 +291,12 @@ with tab2:
 
                 # Metrics
                 st.markdown("#### Metrics")
-                mcols = st.columns(4 if model_choice == "Both" else 2)
+                active_models = [
+                    m for m in ["XGBoost", "LightGBM", "LSTM"]
+                    if model_choice == "All" or model_choice == m
+                ]
+                # 2 metric columns per model (RMSE + MAE)
+                mcols = st.columns(len(active_models) * 2)
 
                 def show_metrics(df, pred_col, label, cols, offset=0):
                     valid = df.dropna(subset=[pred_col])
@@ -301,18 +306,15 @@ with tab2:
                     cols[offset].metric(f"{label} RMSE", f"{rmse:.2f}")
                     cols[offset + 1].metric(f"{label} MAE", f"{mae:.2f}")
 
+                col_offset = 0
                 if model_choice in ("XGBoost", "All"):
-                    show_metrics(results_df, "xgb_pred", "XGBoost", mcols, 0)
+                    show_metrics(results_df, "xgb_pred", "XGBoost", mcols, col_offset)
+                    col_offset += 2
                 if model_choice in ("LightGBM", "All"):
-                    show_metrics(results_df, "lgbm_pred", "LightGBM", mcols, 0)
+                    show_metrics(results_df, "lgbm_pred", "LightGBM", mcols, col_offset)
+                    col_offset += 2
                 if model_choice in ("LSTM", "All"):
-                    show_metrics(
-                        results_df,
-                        "lstm_pred",
-                        "LSTM",
-                        mcols,
-                        2 if model_choice == "All" else 0,
-                    )
+                    show_metrics(results_df, "lstm_pred", "LSTM", mcols, col_offset)
 
                 # Scatter
                 st.markdown("#### Predicted vs True RUL")
