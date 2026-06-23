@@ -34,7 +34,6 @@ import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-
 from src.features.build_feature import select_features
 
 # ---------------------------------------------------------------------------

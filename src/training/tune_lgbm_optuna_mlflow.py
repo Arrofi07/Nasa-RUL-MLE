@@ -10,24 +10,22 @@
 
 """
 
+import json
 from pathlib import Path
 
+import joblib
 import mlflow
 import mlflow.lightgbm
 import numpy as np
 import optuna
 import pandas as pd
-import joblib
-import json
-
+from lightgbm import LGBMRegressor
 from sklearn.metrics import (
     mean_absolute_error,
     mean_squared_error,
     r2_score,
 )
 from sklearn.model_selection import GroupShuffleSplit
-from lightgbm import LGBMRegressor
-
 
 PROCESSED_DIR = Path("data/processed")
 MODEL_DIR = Path("models")
@@ -104,8 +102,6 @@ def create_test_set(
     return X_test, y_test
 
 
-import lightgbm as lgb
-
 def objective(
     trial,
     X_train,
@@ -113,59 +109,48 @@ def objective(
     X_val,
     y_val,
 ):
-
     params = {
-
-        "objective":"regression",
-        "metric":"rmse",
-
-        "learning_rate":trial.suggest_float(
+        "objective": "regression",
+        "metric": "rmse",
+        "learning_rate": trial.suggest_float(
             "learning_rate",
             1e-3,
             0.2,
             log=True,
         ),
-
-        "num_leaves":trial.suggest_int(
+        "num_leaves": trial.suggest_int(
             "num_leaves",
             16,
             256,
         ),
-
-        "max_depth":trial.suggest_int(
+        "max_depth": trial.suggest_int(
             "max_depth",
             3,
             12,
         ),
-
-        "min_child_samples":trial.suggest_int(
+        "min_child_samples": trial.suggest_int(
             "min_child_samples",
             5,
             100,
         ),
-
-        "feature_fraction":trial.suggest_float(
+        "feature_fraction": trial.suggest_float(
             "feature_fraction",
             0.6,
             1.0,
         ),
-
-        "bagging_fraction":trial.suggest_float(
+        "bagging_fraction": trial.suggest_float(
             "bagging_fraction",
             0.6,
             1.0,
         ),
-
-        "bagging_freq":1,
-
-        "lambda_l1":trial.suggest_float(
+        "bagging_freq": 1,
+        "lambda_l1": trial.suggest_float(
             "lambda_l1",
             1e-8,
             10,
             log=True,
         ),
-
-        "lambda_l2":trial.suggest_float(
+        "lambda_l2": trial.suggest_float(
             "lambda_l2",
             1e-8,
             10,
@@ -184,7 +169,7 @@ def objective(
             X_train,
             y_train,
             eval_set=[(X_val, y_val)],
-            #verbose=False,
+            # verbose=False,
         )
 
         preds = model.predict(X_val)
@@ -305,7 +290,6 @@ def save_model(
     model,
     output_dir: Path | str = MODEL_DIR,
 ):
-
     output_dir = Path(output_dir)
 
     model_path = output_dir / "best_lgbm.pkl"
@@ -325,7 +309,6 @@ def run_tuning_pipeline(
     experiment_name: str = "NASA_Turbofan_RUL",
     n_trials: int = 30,
 ):
-
     mlflow.set_tracking_uri(str(MLRUNS_DIR.resolve()))
 
     mlflow.set_experiment(experiment_name)
@@ -340,15 +323,13 @@ def run_tuning_pipeline(
     )
 
     study = tune_model(
-    X_train,
-    y_train,
-    X_val,
-    y_val,
+        X_train,
+        y_train,
+        X_val,
+        y_val,
     )
 
-    X_full = train_df.drop(
-        columns=["engine_id", "rul"]
-    )
+    X_full = train_df.drop(columns=["engine_id", "rul"])
 
     y_full = train_df["rul"]
 

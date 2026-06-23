@@ -1,5 +1,5 @@
-from sklearn.model_selection import GroupShuffleSplit
 import numpy as np
+from sklearn.model_selection import GroupShuffleSplit
 
 
 def create_sequences(

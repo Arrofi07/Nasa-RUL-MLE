@@ -19,11 +19,11 @@ At inference we just load them and call .transform() — never .fit().
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import joblib
 import numpy as np
 import pandas as pd
-from pathlib import Path
-
 
 # No hardcoded sensor drop list — the pipeline derives the correct
 # columns from the preprocess scaler's feature_names_in_ attribute.

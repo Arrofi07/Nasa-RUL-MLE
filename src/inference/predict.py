@@ -17,7 +17,6 @@ import torch.nn as nn
 
 from src.inference.pipeline import InferencePipeline
 
-
 # ---------------------------------------------------------------------------
 # LSTM architecture (must match training exactly)
 # ---------------------------------------------------------------------------

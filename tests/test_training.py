@@ -9,10 +9,10 @@ Tests cover train_baseline.py:
   - full train_pipeline integration
 """
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
-import joblib
 
 from src.training.train_baseline import (
     evaluate,
@@ -21,7 +21,6 @@ from src.training.train_baseline import (
     train_models,
     train_pipeline,
 )
-
 
 # ===========================================================================
 # Helpers

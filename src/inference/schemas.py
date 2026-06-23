@@ -7,7 +7,6 @@ and what it returns (response).
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Sensor reading — one row of raw sensor data for a single engine
 # ---------------------------------------------------------------------------

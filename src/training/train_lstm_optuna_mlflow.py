@@ -189,7 +189,6 @@ def load_data():
 
 
 def objective(trial: optuna.Trial, train_df: pd.DataFrame, feature_cols: list[str]):
-
     # ---- Hyperparameter search space ----
     seq_len = trial.suggest_int("seq_len", 20, 50)
     hidden_size = trial.suggest_categorical("hidden_size", [32, 64, 128, 256])
@@ -379,7 +378,6 @@ def train_final_model(
 
 
 def run_lstm_pipeline(n_trials: int = 30):
-
     mlflow.set_tracking_uri(str(MLRUNS_DIR.resolve()))
     mlflow.set_experiment("NASA_Turbofan_RUL")
 

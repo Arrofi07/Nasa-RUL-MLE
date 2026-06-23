@@ -25,7 +25,6 @@ from src.features.sequence_builder import (
     create_sequences,
 )
 
-
 # ===========================================================================
 # select_features
 # ===========================================================================
@@ -156,9 +155,9 @@ class TestAddDifferenceFeatures:
         )
         first_cycles = train[train["cycle"] == 1]
         for col in feat_cols:
-            assert (first_cycles[f"{col}_diff"] == 0.0).all(), (
-                f"First cycle {col}_diff is not 0"
-            )
+            assert (
+                first_cycles[f"{col}_diff"] == 0.0
+            ).all(), f"First cycle {col}_diff is not 0"
 
     def test_diff_respects_engine_boundary(self, feat_cols):
         """Diff must not subtract across engines."""
@@ -259,14 +258,16 @@ class TestBuildFeaturesIntegration:
 
 class TestCreateSequences:
     def test_output_shapes(self, feature_train_df, feat_cols):
-        from conftest import N_ENGINES, N_CYCLES
+        from conftest import N_CYCLES, N_ENGINES
 
         seq_len = 10
         X, y = create_sequences(feature_train_df, seq_len, feat_cols)
         expected_seqs = N_ENGINES * (N_CYCLES - seq_len)
-        assert X.shape == (expected_seqs, seq_len, len(feat_cols)), (
-            f"Expected ({expected_seqs}, {seq_len}, {len(feat_cols)}), got {X.shape}"
-        )
+        assert X.shape == (
+            expected_seqs,
+            seq_len,
+            len(feat_cols),
+        ), f"Expected ({expected_seqs}, {seq_len}, {len(feat_cols)}), got {X.shape}"
         assert y.shape == (expected_seqs,)
 
     def test_seq_len_larger_than_engine_produces_no_sequence(self, feat_cols):
@@ -318,9 +319,9 @@ class TestCreateGroupSplitSequences:
         )
         train_engines = set(feature_train_df.iloc[train_idx]["engine_id"])
         val_engines = set(feature_train_df.iloc[val_idx]["engine_id"])
-        assert train_engines.isdisjoint(val_engines), (
-            f"Engine IDs appear in both splits: {train_engines & val_engines}"
-        )
+        assert train_engines.isdisjoint(
+            val_engines
+        ), f"Engine IDs appear in both splits: {train_engines & val_engines}"
 
     def test_shapes_consistent(self, feature_train_df, feat_cols):
         seq_len = 5

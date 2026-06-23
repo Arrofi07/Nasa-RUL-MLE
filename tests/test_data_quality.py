@@ -53,9 +53,9 @@ class TestLoadAndPreprocessData:
             output_dir=out,
         )
         expected = EXPECTED_COLS + ["rul"]
-        assert list(train.columns) == expected, (
-            f"Unexpected columns: {train.columns.tolist()}"
-        )
+        assert (
+            list(train.columns) == expected
+        ), f"Unexpected columns: {train.columns.tolist()}"
 
     def test_test_columns(self, raw_dir, tmp_path):
         out = tmp_path / "out"
@@ -148,13 +148,13 @@ class TestLoadAndPreprocessData:
             rul_path=str(raw_dir / "RUL_FD001.txt"),
             output_dir=out,
         )
-        assert pd.api.types.is_integer_dtype(train["engine_id"]), (
-            "engine_id should be integer"
-        )
+        assert pd.api.types.is_integer_dtype(
+            train["engine_id"]
+        ), "engine_id should be integer"
 
     def test_row_count_preserved(self, raw_dir, tmp_path):
         """Row count in train output == n_engines × cycles_per_engine."""
-        from conftest import N_ENGINES, N_CYCLES
+        from conftest import N_CYCLES, N_ENGINES
 
         out = tmp_path / "out"
         train, _, _ = load_and_preprocess_data(
@@ -164,9 +164,9 @@ class TestLoadAndPreprocessData:
             output_dir=out,
         )
         expected_rows = N_ENGINES * N_CYCLES
-        assert len(train) == expected_rows, (
-            f"Expected {expected_rows} rows, got {len(train)}"
-        )
+        assert (
+            len(train) == expected_rows
+        ), f"Expected {expected_rows} rows, got {len(train)}"
 
 
 # ===========================================================================
@@ -201,9 +201,9 @@ class TestNormalizeFeatures:
             c for c in train_norm.columns if c not in ["engine_id", "cycle", "rul"]
         ]
         means = train_norm[feature_cols].mean().abs()
-        assert (means < 0.1).all(), (
-            "Train feature means should be ~0 after normalization"
-        )
+        assert (
+            means < 0.1
+        ).all(), "Train feature means should be ~0 after normalization"
 
     def test_train_std_near_one(self, raw_train_df, raw_test_df):
         train_norm, _ = normalize_features(raw_train_df.copy(), raw_test_df.copy())
@@ -211,9 +211,9 @@ class TestNormalizeFeatures:
             c for c in train_norm.columns if c not in ["engine_id", "cycle", "rul"]
         ]
         stds = train_norm[feature_cols].std()
-        assert ((stds - 1.0).abs() < 0.1).all(), (
-            "Train feature stds should be ~1 after normalization"
-        )
+        assert (
+            (stds - 1.0).abs() < 0.1
+        ).all(), "Train feature stds should be ~1 after normalization"
 
     def test_no_leakage_from_test(self, raw_train_df, raw_test_df):
         """Test scaler is fitted on train only — same train data → same result."""
@@ -253,9 +253,9 @@ class TestPreprocessDataIntegration:
             c for c in train.columns if c not in ["engine_id", "cycle", "rul"]
         ]
         for col in feature_cols:
-            assert train[col].nunique() > 1, (
-                f"{col} is constant — should have been dropped"
-            )
+            assert (
+                train[col].nunique() > 1
+            ), f"{col} is constant — should have been dropped"
 
     def test_no_missing_values(self, processed_dir):
         train = pd.read_csv(processed_dir / "train_clean.csv")
@@ -268,6 +268,6 @@ class TestPreprocessDataIntegration:
         test = pd.read_csv(processed_dir / "test_clean.csv")
         train_feat = [c for c in train.columns if c not in ["rul"]]
         test_feat = list(test.columns)
-        assert set(train_feat) == set(test_feat), (
-            "Train and test feature columns differ"
-        )
+        assert set(train_feat) == set(
+            test_feat
+        ), "Train and test feature columns differ"

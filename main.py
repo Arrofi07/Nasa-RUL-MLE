@@ -25,8 +25,9 @@ Two environment variables are set before anything imports torch:
     if they happen to be installed in the same venv.
 """
 
-import os
 import multiprocessing
+import os
+
 import uvicorn
 
 # Must be set BEFORE torch is imported anywhere

@@ -14,19 +14,18 @@
 """
 
 from pathlib import Path
+
 import joblib
 import numpy as np
 import pandas as pd
-
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.metrics import (
-    mean_squared_error,
     mean_absolute_error,
+    mean_squared_error,
     r2_score,
 )
-
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor
 
 PROCESSED_DIR = Path("data/processed")

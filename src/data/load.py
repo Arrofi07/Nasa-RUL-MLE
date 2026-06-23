@@ -5,8 +5,9 @@ Load & preprocess NASA Turbofan (RUL) dataset.
 - Tests can pass a temp `output_dir` so nothing in data/ is touched.
 """
 
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 DATA_DIR = Path("data/raw")
 

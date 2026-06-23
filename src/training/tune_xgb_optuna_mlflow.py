@@ -10,16 +10,15 @@
 
 """
 
+import json
 from pathlib import Path
 
+import joblib
 import mlflow
 import mlflow.xgboost
 import numpy as np
 import optuna
 import pandas as pd
-import joblib
-import json
-
 from sklearn.metrics import (
     mean_absolute_error,
     mean_squared_error,
@@ -27,7 +26,6 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GroupShuffleSplit
 from xgboost import XGBRegressor
-
 
 PROCESSED_DIR = Path("data/processed")
 MODEL_DIR = Path("models")
@@ -295,7 +293,6 @@ def save_model(
     model,
     output_dir: Path | str = MODEL_DIR,
 ):
-
     output_dir = Path(output_dir)
 
     model_path = output_dir / "best_xgb.pkl"
@@ -315,7 +312,6 @@ def run_tuning_pipeline(
     experiment_name: str = "NASA_Turbofan_RUL",
     n_trials: int = 30,
 ):
-
     mlflow.set_tracking_uri(str(MLRUNS_DIR.resolve()))
 
     mlflow.set_experiment(experiment_name)
@@ -330,15 +326,13 @@ def run_tuning_pipeline(
     )
 
     study = tune_model(
-    X_train,
-    y_train,
-    X_val,
-    y_val,
-)
-
-    X_full = train_df.drop(
-        columns=["engine_id", "rul"]
+        X_train,
+        y_train,
+        X_val,
+        y_val,
     )
+
+    X_full = train_df.drop(columns=["engine_id", "rul"])
 
     y_full = train_df["rul"]
 

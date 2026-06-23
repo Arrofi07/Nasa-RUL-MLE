@@ -35,7 +35,7 @@ jobs:
         run: |
           if uv run python -c "import importlib.util; exit(0 if importlib.util.find_spec('ruff') else 1)"
           then
-            uv run ruff check .
+            uv run ruff check . --fix
           else
             echo "ruff not installed, skipping."
           fi

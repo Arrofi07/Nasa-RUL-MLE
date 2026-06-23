@@ -20,13 +20,12 @@ from fastapi.responses import JSONResponse
 from src.inference.predict import ModelRegistry
 from src.inference.schemas import (
     HealthResponse,
-    LSTMPrediction,
-    SequenceRequest,
-    SensorReading,
-    XGBPrediction,
     LGBMPrediction,
+    LSTMPrediction,
+    SensorReading,
+    SequenceRequest,
+    XGBPrediction,
 )
-
 
 # ---------------------------------------------------------------------------
 # Lifespan — load models once at startup
@@ -144,6 +143,7 @@ def predict_xgb(
         predicted_rul=round(rul, 2),
     )
 
+
 @app.post(
     "/predict/lgbm",
     response_model=LGBMPrediction,
@@ -201,6 +201,7 @@ def predict_xgb_batch(
         cycle=last.cycle,
         predicted_rul=round(rul, 2),
     )
+
 
 @app.post(
     "/predict/lgbm/batch",

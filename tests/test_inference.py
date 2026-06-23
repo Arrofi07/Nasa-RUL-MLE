@@ -16,11 +16,12 @@ column counts that break when the pipeline changes.
 """
 
 import json
+from pathlib import Path
+
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
 import pytest
-from pathlib import Path
 
 # torch is NOT imported at module level — importing it during pytest collection
 # triggers MPS/OpenMP on macOS and causes a segfault.
@@ -81,9 +82,9 @@ def _make_artifacts(tmp_path: Path, processed_dir: Path, feature_dir: Path):
     Both come from conftest fixtures so column counts are always consistent
     with the production pipeline — no hardcoded numbers.
     """
+    from lightgbm import LGBMRegressor
     from sklearn.preprocessing import StandardScaler
     from xgboost import XGBRegressor
-    from lightgbm import LGBMRegressor
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     # rng = np.random.default_rng(0)
@@ -290,6 +291,7 @@ class TestFastAPIEndpoints:
     @pytest.fixture()
     def client(self, registry):
         from fastapi.testclient import TestClient
+
         from src.api.app import app
 
         app.state.registry = registry

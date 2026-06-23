@@ -57,8 +57,7 @@ def select_features(
     selected = [c for c in corr[corr > threshold].index if c not in _META_COLS]
 
     print(
-        f"✅ Selected {len(selected)} features after correlation filter "
-        f"(threshold={threshold})"
+        f"✅ Selected {len(selected)} features after correlation filter (threshold={threshold})"
     )
 
     if not selected:

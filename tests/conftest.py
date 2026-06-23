@@ -18,7 +18,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Sizing constants — large enough for feature selection to work reliably
 # ---------------------------------------------------------------------------
@@ -141,6 +140,7 @@ def feature_dir(tmp_path, processed_dir):
     regardless of random seed in synthetic test data.
     """
     import shutil
+
     from src.features.build_feature import build_features
 
     out = tmp_path / "features"

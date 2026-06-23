@@ -29,8 +29,8 @@ warnings.filterwarnings("ignore")
 # Config
 # ---------------------------------------------------------------------------
 
-API_URL      = os.environ.get("API_URL", "http://127.0.0.1:8000")
-#API_URL = os.environ.get("API_URL", "https://nasa-rul-mle-production.up.railway.app")
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+# API_URL = os.environ.get("API_URL", "https://nasa-rul-mle-production.up.railway.app")
 PROCESSED_DIR = "data/processed"
 
 # DROPPED_SENSORS = {"sensor_1", "sensor_5", "sensor_10", "sensor_16", "sensor_18", "sensor_19"}
@@ -89,7 +89,8 @@ def predict_xgb_batch(readings: list) -> float | None:
         return r.json()["predicted_rul"]
     except Exception:
         return None
-    
+
+
 def predict_lgbm_batch(readings: list) -> float | None:
     try:
         r = requests.post(
@@ -99,6 +100,7 @@ def predict_lgbm_batch(readings: list) -> float | None:
         return r.json()["predicted_rul"]
     except Exception:
         return None
+
 
 def predict_lstm(readings: list) -> float | None:
     try:
@@ -170,7 +172,7 @@ with tab1:
                     labels={"cycle": "Cycle", sensor_choice: "Normalised value"},
                 )
                 fig.update_traces(line_color="#1f77b4")
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, width="stretch")
             else:
                 st.info(f"{sensor_choice} was dropped during preprocessing.")
 
@@ -200,14 +202,16 @@ with tab1:
                 c3.metric(
                     "LightGBM RUL",
                     f"{lgbm_rul:.1f} cycles" if lgbm_rul is not None else "—",
-                    delta=f"{lgbm_rul - true_rul:+.1f}" if lgbm_rul is not None else None,
+                    delta=(
+                        f"{lgbm_rul - true_rul:+.1f}" if lgbm_rul is not None else None
+                    ),
                 )
                 c4.metric(
                     "LSTM RUL",
                     f"{lstm_rul:.1f} cycles" if lstm_rul is not None else "—",
-                    delta=f"{lstm_rul - true_rul:+.1f}"
-                    if lstm_rul is not None
-                    else None,
+                    delta=(
+                        f"{lstm_rul - true_rul:+.1f}" if lstm_rul is not None else None
+                    ),
                 )
 
                 results = {"Model": [], "Predicted RUL": []}
@@ -239,7 +243,7 @@ with tab1:
                     },
                     title=f"Engine {engine_id} — Predicted vs True RUL",
                 )
-                st.plotly_chart(fig2, width='stretch')
+                st.plotly_chart(fig2, width="stretch")
 
     except FileNotFoundError as e:
         st.error(f"Processed data not found: {e}\nRun the data pipeline first.")
@@ -292,7 +296,8 @@ with tab2:
                 # Metrics
                 st.markdown("#### Metrics")
                 active_models = [
-                    m for m in ["XGBoost", "LightGBM", "LSTM"]
+                    m
+                    for m in ["XGBoost", "LightGBM", "LSTM"]
                     if model_choice == "All" or model_choice == m
                 ]
                 # 2 metric columns per model (RMSE + MAE)
@@ -362,7 +367,7 @@ with tab2:
                     yaxis_title="Predicted RUL (cycles)",
                     title="Predicted vs True RUL — Test Set",
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, width="stretch")
 
                 # Error distribution
                 st.markdown("#### Prediction Error Distribution")
@@ -407,10 +412,10 @@ with tab2:
                     yaxis_title="Count",
                     title="Error Distribution (Predicted − True)",
                 )
-                st.plotly_chart(fig_err, width='stretch')
+                st.plotly_chart(fig_err, width="stretch")
 
                 with st.expander("View full results table"):
-                    st.dataframe(results_df.round(2), width='stretch')
+                    st.dataframe(results_df.round(2), width="stretch")
 
             except FileNotFoundError as e:
                 st.error(f"Processed data not found: {e}")
@@ -498,9 +503,7 @@ with tab3:
                     color = (
                         "#2ecc71"
                         if rul_val > 80
-                        else "#f39c12"
-                        if rul_val > 30
-                        else "#e74c3c"
+                        else "#f39c12" if rul_val > 30 else "#e74c3c"
                     )
 
                     fig_gauge = go.Figure(
@@ -525,7 +528,7 @@ with tab3:
                         )
                     )
                     fig_gauge.update_layout(height=300)
-                    st.plotly_chart(fig_gauge, width='stretch')
+                    st.plotly_chart(fig_gauge, width="stretch")
 
                 except requests.HTTPError:
                     st.error(f"API error {r.status_code}: {r.text}")
