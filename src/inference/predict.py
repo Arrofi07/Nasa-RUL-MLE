@@ -40,7 +40,7 @@ class LSTMModel(nn.Module):
             dropout=lstm_dropout,
         )
         self.head = nn.Sequential(
-            nn.LayerNorm(hidden_size),  # works on any batch size, including 1
+            nn.LayerNorm(hidden_size),
             nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -62,8 +62,8 @@ class ModelRegistry:
     """
     Loads and holds all models + the inference pipeline.
 
-    Call `from_paths()` once at startup; then use `predict_xgb()`
-    and `predict_lstm()` inside route handlers.
+    Call `from_paths()` once at startup; then use `predict_xgb()`,
+    `predict_lgbm()`, and `predict_lstm()` inside route handlers.
     """
 
     def __init__(
@@ -98,23 +98,19 @@ class ModelRegistry:
         """
         Load all artifacts from disk.
 
-        Missing LSTM weights → lstm stays None (XGBoost-only mode).
-        Missing XGBoost pickle → raises FileNotFoundError immediately.
+        Missing LSTM weights → lstm stays None (tree-model-only mode).
+        Missing XGBoost or LightGBM pickle → raises FileNotFoundError.
         """
         # MPS (Apple Silicon GPU) is intentionally skipped — it segfaults at
         # torch.load() time on several macOS + PyTorch 2.x combinations.
-        # CPU inference is fast enough for this model size.
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # --- XGBoost (required) ---
         xgb_path = Path(xgb_path)
         if not xgb_path.exists():
             raise FileNotFoundError(
                 f"XGBoost model not found at {xgb_path}. "
-                "Run the tuning script first: python -m src.training.tune_xgb_optuna_mlflow"
+                "Run: python -m src.training.tune_xgb_optuna_mlflow"
             )
         xgb_model = joblib.load(xgb_path)
 
@@ -123,9 +119,21 @@ class ModelRegistry:
         if not lgbm_path.exists():
             raise FileNotFoundError(
                 f"LightGBM model not found at {lgbm_path}. "
-                "Run the tuning script first: python -m src.training.tune_lgbm_optuna_mlflow"
+                "Run: python -m src.training.tune_lgbm_optuna_mlflow"
             )
         lgbm_model = joblib.load(lgbm_path)
+
+        # Force LightGBM to use 1 thread at predict time.
+        # On macOS, XGBoost and LightGBM each ship their own libomp.dylib.
+        # When both are loaded in the same process and both spin up OpenMP
+        # thread pools the runtimes corrupt each other's thread-state memory,
+        # causing a SIGSEGV in __kmp_suspend_initialize_thread.
+        # Capping LightGBM to n_jobs=1 keeps it single-threaded and avoids
+        # the conflict entirely. For single-row inference this has zero cost.
+        try:
+            lgbm_model.set_params(n_jobs=1)
+        except Exception:
+            pass  # older joblib pickles may not support set_params
 
         # --- LSTM config ---
         with open(lstm_config_path) as f:
@@ -156,22 +164,6 @@ class ModelRegistry:
             )
             lstm_model.eval()
 
-            # print("=== MODEL FEATURES ===")
-            # print(list(xgb_model.feature_names_in_))
-
-            # print("=== PIPELINE FEATURES ===")
-            # print(pipeline.feature_cols)
-
-            # print(
-            #    "Missing from pipeline:",
-            #    set(xgb_model.feature_names_in_) - set(pipeline.feature_cols)
-            # )
-
-            # print(
-            #    "Extra in pipeline:",
-            #    set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
-            # )
-
         return cls(xgb_model, lgbm_model, lstm_model, pipeline, lstm_config, device)
 
     # ------------------------------------------------------------------
@@ -199,9 +191,7 @@ class ModelRegistry:
         We recommend sending at least 5 cycles (rolling_window size).
         """
         X = self.pipe.transform_xgb(readings)
-
         pred = float(self.xgb.predict(X)[0])
-        # Clip to [0, 125] — matches the RUL cap used during training
         return max(0.0, min(pred, 125.0))
 
     def predict_lgbm(self, readings: list[dict]) -> float:
@@ -211,11 +201,12 @@ class ModelRegistry:
         The last reading in the list is the prediction point.
         Earlier readings are used only to build rolling / diff features.
         We recommend sending at least 5 cycles (rolling_window size).
+
+        num_threads=1 is passed explicitly to .predict() as a second line of
+        defence against the dual-libomp SIGSEGV on macOS Apple Silicon.
         """
         X = self.pipe.transform_lgbm(readings)
-
-        pred = float(self.lgbm.predict(X)[0])
-        # Clip to [0, 125] — matches the RUL cap used during training
+        pred = float(self.lgbm.predict(X, num_threads=1)[0])
         return max(0.0, min(pred, 125.0))
 
     def predict_lstm(self, readings: list[dict]) -> float:

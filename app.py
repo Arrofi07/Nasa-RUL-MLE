@@ -80,10 +80,25 @@ def build_sensor_row(row: pd.Series) -> dict:
     return d
 
 
+# How many cycles each model actually needs from history.
+# Sending the full engine history (up to 300+ rows) wastes memory and
+# serialisation time — the pipeline only uses the last TREE_WINDOW rows
+# for rolling/diff features, and the last LSTM_SEQ rows for the sequence.
+_TREE_WINDOW = 5   # rolling_window in InferencePipeline
+_LSTM_SEQ = 41     # seq_len in InferencePipeline / lstm_config.json
+
+
+def _trim(readings: list, n: int) -> list:
+    """Return the last n readings (or all if fewer than n exist)."""
+    return readings[-n:] if len(readings) > n else readings
+
+
 def predict_xgb_batch(readings: list) -> float | None:
     try:
         r = requests.post(
-            f"{API_URL}/predict/xgb/batch", json={"readings": readings}, timeout=10
+            f"{API_URL}/predict/xgb/batch",
+            json={"readings": _trim(readings, _TREE_WINDOW)},
+            timeout=10,
         )
         r.raise_for_status()
         return r.json()["predicted_rul"]
@@ -94,7 +109,9 @@ def predict_xgb_batch(readings: list) -> float | None:
 def predict_lgbm_batch(readings: list) -> float | None:
     try:
         r = requests.post(
-            f"{API_URL}/predict/lgbm/batch", json={"readings": readings}, timeout=10
+            f"{API_URL}/predict/lgbm/batch",
+            json={"readings": _trim(readings, _TREE_WINDOW)},
+            timeout=10,
         )
         r.raise_for_status()
         return r.json()["predicted_rul"]
@@ -105,7 +122,9 @@ def predict_lgbm_batch(readings: list) -> float | None:
 def predict_lstm(readings: list) -> float | None:
     try:
         r = requests.post(
-            f"{API_URL}/predict/lstm", json={"readings": readings}, timeout=10
+            f"{API_URL}/predict/lstm",
+            json={"readings": _trim(readings, _LSTM_SEQ)},
+            timeout=10,
         )
         r.raise_for_status()
         return r.json()["predicted_rul"]
@@ -186,11 +205,11 @@ with tab1:
                 readings = [build_sensor_row(row) for _, row in engine_raw.iterrows()]
 
                 with st.spinner("Calling XGBoost…"):
-                    xgb_rul = predict_xgb_batch(readings)
+                    xgb_rul = predict_xgb_batch(readings)  # trims to last 5 internally
                 with st.spinner("Calling LightGBM…"):
-                    lgbm_rul = predict_lgbm_batch(readings)
+                    lgbm_rul = predict_lgbm_batch(readings)  # trims to last 5 internally
                 with st.spinner("Calling LSTM…"):
-                    lstm_rul = predict_lstm(readings)
+                    lstm_rul = predict_lstm(readings)  # trims to last 41 internally
 
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("True RUL", f"{true_rul:.0f} cycles")

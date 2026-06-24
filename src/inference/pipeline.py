@@ -19,11 +19,11 @@ At inference we just load them and call .transform() — never .fit().
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import joblib
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
 
 # No hardcoded sensor drop list — the pipeline derives the correct
 # columns from the preprocess scaler's feature_names_in_ attribute.
@@ -158,13 +158,12 @@ class InferencePipeline:
     # Public transform methods
     # ------------------------------------------------------------------
 
-    def _transform_tree(self, readings: list[dict]) -> np.ndarray:
+    def _transform_tree(self, readings: list[dict]) -> pd.DataFrame:
         """
-        Internal: transform a list of sensor dicts into a tree model feature matrix.
+        Internal: build a single-row feature DataFrame shared by both tree models.
 
-        For a single-row prediction pass a list with one dict.
-        The last row is used as the prediction point (mirrors how the
-        training test set takes the last cycle of each engine).
+        Returns a named DataFrame so callers can choose whether to keep column
+        names (LightGBM) or strip them to a numpy array (XGBoost).
         """
         df = self._to_dataframe(readings)
         df = self._align_to_scaler(df)
@@ -174,24 +173,22 @@ class InferencePipeline:
         X.insert(0, "cycle", df["cycle"].iloc[-1])
 
         # Tree models predict on the final cycle row
-        return X.iloc[[-1]].values
+        return X.iloc[[-1]]
 
     def transform_xgb(self, readings: list[dict]) -> np.ndarray:
         """
-        Transform a list of sensor dicts into an XGBoost feature matrix.
+        Transform sensor dicts into an XGBoost feature matrix (numpy array).
 
-        For a single-row prediction pass a list with one dict.
-        The last row is used as the prediction point (mirrors how the
-        training test set takes the last cycle of each engine).
+        XGBoost accepts unnamed arrays, so .values is fine here.
         """
-        return self._transform_tree(readings)
+        return self._transform_tree(readings).values
 
-    def transform_lgbm(self, readings: list[dict]) -> np.ndarray:
+    def transform_lgbm(self, readings: list[dict]) -> pd.DataFrame:
         """
-        Transform a list of sensor dicts into a LightGBM feature matrix.
+        Transform sensor dicts into a LightGBM feature DataFrame.
 
-        Identical transformation to XGBoost — both tree models share the
-        same feature pipeline.
+        Returns a named DataFrame — LightGBM matches features by column name,
+        so keeping the names avoids the 'X does not have valid feature names' warning.
         """
         return self._transform_tree(readings)
 
