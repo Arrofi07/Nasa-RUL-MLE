@@ -1,71 +1,103 @@
-# NASA Turbofan RUL Prediction
+# ✈️ NASA Turbofan — Remaining Useful Life Prediction
 
-An end-to-end machine learning engineering project for predicting the **Remaining Useful Life (RUL)** of turbofan engines using the NASA CMAPSS FD001 dataset. The project follows ML engineering best practices with modular pipelines, experiment tracking via MLflow, hyperparameter tuning via Optuna, and a production-ready REST API built with FastAPI.
+[![CI](https://github.com/Arrofi07/NASA-RUL-MLE/actions/workflows/ci.yml/badge.svg)](https://github.com/Arrofi07/NASA-RUL-MLE/actions/workflows/ci.yml)
+[![Live API](https://img.shields.io/badge/API-Railway-6366f1?logo=railway)](https://nasa-rul-mle-production.up.railway.app/health)
+[![Dashboard](https://img.shields.io/badge/Dashboard-Streamlit-ff4b4b?logo=streamlit)](https://nasa-rul-dashboard.streamlit.app)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python)](https://www.python.org)
+
+An end-to-end **Machine Learning Engineering** project that predicts the Remaining Useful Life (RUL) of turbofan engines from raw sensor readings. Built on the NASA CMAPSS FD001 dataset with a full ML pipeline, three trained models, a production REST API, and a live interactive dashboard.
+
+**Live links:**
+- 🌐 **Dashboard** — [nasa-rul-dashboard.streamlit.app](https://nasa-rul-dashboard.streamlit.app)
+- 🔌 **API** — [nasa-rul-mle-production.up.railway.app](https://nasa-rul-mle-production.up.railway.app/health)
+- 📖 **Swagger UI** — [/docs](https://nasa-rul-mle-production.up.railway.app/docs)
 
 ---
 
 ## Table of Contents
 
-- [Project Overview](#project-overview)
+- [Overview](#overview)
 - [Architecture](#architecture)
 - [Dataset](#dataset)
-- [Pipeline](#pipeline)
 - [Models & Results](#models--results)
-- [API Endpoints](#api-endpoints)
+- [API Reference](#api-reference)
 - [Project Structure](#project-structure)
 - [Setup & Installation](#setup--installation)
 - [Common Commands](#common-commands)
-- [Development Roadmap](#development-roadmap)
+- [CI/CD](#cicd)
+- [Deployment](#deployment)
+- [Roadmap](#roadmap)
 
 ---
 
-## Project Overview
+## Overview
 
-Turbofan engines degrade over time. Predicting when an engine will fail — and how many cycles remain — allows operators to schedule maintenance proactively and avoid costly unplanned downtime.
+Turbofan engines degrade over time through wear and stress on components. Predicting **how many operational cycles remain** before failure allows maintenance teams to act proactively — avoiding costly unplanned downtime and unnecessary early replacements.
 
-This project builds a full ML pipeline that takes raw sensor readings from a running engine and outputs a predicted RUL in operational cycles. Two models are trained and served:
+This project builds a complete ML pipeline from raw sensor data to live predictions:
 
-- **XGBoost** — tree-based model tuned with Optuna, served on single or batched readings
-- **LSTM** — sequence model that captures temporal degradation patterns across engine cycles
+- **Three models trained and served:** XGBoost, LightGBM, and LSTM
+- **Feature engineering pipeline** reproduced faithfully at inference (no data leakage)
+- **FastAPI REST API** deployed on Railway — all three models available via HTTP
+- **Streamlit dashboard** for interactive exploration, batch evaluation, and live prediction
+- **Experiment tracking** with MLflow + hyperparameter tuning with Optuna
+- **CI/CD** with GitHub Actions → automatic Railway deployment on push
 
 ---
 
 ## Architecture
 
 ```
-Raw Sensor Data
-      │
-      ▼
-┌─────────────────┐
-│   Data Loading  │  load.py
-│  (preprocess)   │  preprocess.py
-└────────┬────────┘
-         │  Drop low-info sensors, normalize
+Raw Sensor Data (NASA FD001)
+         │
          ▼
-┌─────────────────┐
-│    Feature      │  build_feature.py
-│  Engineering    │  sequence_builder.py
-└────────┬────────┘
-         │  Correlation selection, rolling mean, diff features
-         ▼
-┌─────────────────────────────────┐
-│          Model Training         │
-│                                 │
-│  XGBoost + Optuna + MLflow      │  tune_xgb_optuna_mlflow.py
-│  LSTM    + Optuna + MLflow      │  train_lstm_optuna_mlflow.py
-└────────┬────────────────────────┘
-         │  Saved: best_xgb.pkl, best_lstm.pt
-         ▼
-┌─────────────────┐
-│  Artifact       │  export_artifacts.py
-│  Export         │  Saves scalers + feature list for inference
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│   FastAPI       │  src/api/app.py
-│   REST API      │  src/inference/
-└─────────────────┘
+┌─────────────────────┐
+│   Data Pipeline     │  load.py → preprocess.py
+│                     │  Drop low-info sensors, normalise, compute RUL labels
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Feature Engineering│  build_feature.py, sequence_builder.py
+│                     │  Correlation selection, rolling mean, diff features
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│             Model Training           │
+│                                      │
+│  XGBoost  + Optuna + MLflow          │
+│  LightGBM + Optuna + MLflow          │
+│  LSTM     + Optuna + MLflow          │
+└──────────┬───────────────────────────┘
+           │  Saved: best_xgb.pkl, best_lgbm.pkl, best_lstm.pt
+           ▼
+┌─────────────────────┐
+│  Artifact Export    │  export_artifacts.py
+│                     │  Scalers + feature list saved for inference
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│         Production System            │
+│                                      │
+│  FastAPI (Railway)                   │
+│    └── /predict/xgb                  │
+│    └── /predict/lgbm                 │
+│    └── /predict/lstm                 │
+│                                      │
+│  Streamlit Dashboard (Streamlit Cloud)│
+│    └── Engine Explorer               │
+│    └── Batch Evaluation              │
+│    └── Live Prediction               │
+└──────────────────────────────────────┘
 ```
+
+**Key design decisions:**
+
+- The inference pipeline (`src/inference/pipeline.py`) reproduces every training transformation — scaler, feature selection, rolling mean, diff features — without refitting. This prevents double-scaling and guarantees predictions match training behaviour.
+- `OMP_NUM_THREADS=1` + `KMP_DUPLICATE_LIB_OK=TRUE` are set before any import in `main.py` to prevent an OpenMP SIGSEGV on macOS Apple Silicon caused by XGBoost and LightGBM each loading their own `libomp.dylib`.
+- The Streamlit app trims readings to the last 5 cycles (tree models) and 41 cycles (LSTM) before sending to the API — avoids serialising full engine histories (up to 300+ rows) on every request.
 
 ---
 
@@ -73,50 +105,26 @@ Raw Sensor Data
 
 **NASA CMAPSS Turbofan Engine Degradation Simulation — FD001 subset**
 
-| Split     | Engines | Rows   | Description                              |
-|-----------|---------|--------|------------------------------------------|
-| Train     | 100     | 20,631 | Full run-to-failure cycles               |
-| Test      | 100     | 13,096 | Cycles stopped before failure            |
-| RUL       | 100     | 100    | True RUL for each test engine at cutoff  |
+| Split | Engines | Rows   | Description                             |
+|-------|---------|--------|-----------------------------------------|
+| Train | 100     | 20,631 | Full run-to-failure cycles              |
+| Test  | 100     | 13,096 | Cycles stopped before failure           |
+| RUL   | 100     | 100    | True RUL for each test engine at cutoff |
 
 Each row contains 3 operational settings and 21 sensor measurements per cycle. Engine lifetimes range from 128 to 362 cycles (mean: 206 cycles).
 
 **Preprocessing:**
-- 6 low-information sensors dropped (`sensor_1`, `5`, `10`, `16`, `18`, `19`)
-- RUL clipped at 125 cycles during training (standard FD001 practice)
-- Features standardized using `StandardScaler` fitted on train only
+- 6 low-information sensors dropped (`sensor_1`, `5`, `10`, `16`, `18`, `19`) based on near-zero variance
+- RUL clipped at 125 cycles during training (standard FD001 practice — engines are healthy early on)
+- Features standardised with `StandardScaler` fitted on train only, applied to test
 
 **Feature Engineering:**
 - Correlation-based feature selection (threshold `|r| > 0.2` with RUL)
-- Rolling mean features (window = 5 cycles) to smooth degradation signal
+- Rolling mean (window = 5 cycles) to smooth degradation signal
 - Cycle-to-cycle difference features to capture rate of change
-- Final feature matrix: sensors + rolling means + diffs
+- Final feature matrix: 15 base sensors + rolling means + diffs = 43 features
 
----
-
-## Pipeline
-
-```
-notebooks/00_load.ipynb                →  Load raw FD001 data
-notebooks/01_eda_cleaning.ipynb        →  EDA, sensor analysis, cleaning
-notebooks/02_feature_engineering.ipynb →  Feature selection & engineering
-notebooks/03_baseline_model.ipynb      →  Linear, Ridge, RF, XGBoost baselines
-notebooks/04_tuning_xgb_optuna_mlflow.ipynb  →  XGBoost tuning + MLflow
-notebooks/05_model_lstm.ipynb          →  LSTM tuning + MLflow
-```
-
-Production scripts mirror the notebooks step by step:
-
-```
-src/data/load.py             →  Load & compute RUL labels
-src/data/preprocess.py       →  Clean, drop sensors, normalize
-src/features/build_feature.py        →  Feature engineering
-src/features/sequence_builder.py     →  LSTM sequence construction
-src/training/train_baseline.py       →  Baseline model comparison
-src/training/tune_xgb_optuna_mlflow.py  →  XGBoost tuning pipeline
-src/training/train_lstm_optuna_mlflow.py →  LSTM tuning pipeline
-scripts/export_artifacts.py          →  Export scalers for inference
-```
+> Dataset available at the [NASA Prognostics Data Repository](https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/).
 
 ---
 
@@ -136,7 +144,10 @@ scripts/export_artifacts.py          →  Export scalers for inference
 | Model            | Val RMSE | Test RMSE | Test MAE | Test R² |
 |------------------|----------|-----------|----------|---------|
 | XGBoost (tuned)  | 12.44    | 20.26     | 14.59    | 0.762   |
+| LightGBM (tuned) | 14.81    | 18.36     | 13.32    | 0.805   |
 | LSTM (tuned)     | 3.71     | 17.46     | 12.83    | 0.823   |
+
+LSTM achieves the best test performance by capturing temporal degradation patterns across the full engine history. LightGBM outperforms XGBoost on the test set despite a worse validation RMSE — the tree ensemble generalises better on the held-out engines.
 
 **Best XGBoost hyperparameters** (`models/best_params_xgb.json`):
 
@@ -158,29 +169,33 @@ scripts/export_artifacts.py          →  Export scalers for inference
 {
     "seq_len": 41,
     "hidden_size": 64,
-    "num_layers": 3
+    "num_layers": 3,
+    "dropout": 0.2
 }
 ```
 
-All experiments are tracked in MLflow. Run `mlflow ui` to explore runs.
+All experiments are logged in MLflow. Run `mlflow ui` to explore runs, compare hyperparameters, and view metrics.
 
 ---
 
-## API Endpoints
+## API Reference
 
-| Method | Endpoint              | Model   | Description                                      |
-|--------|-----------------------|---------|--------------------------------------------------|
-| GET    | `/health`             | —       | Server status and which models are loaded        |
-| POST   | `/predict/xgb`        | XGBoost | Single-cycle prediction                          |
-| POST   | `/predict/xgb/batch`  | XGBoost | Multi-cycle prediction (uses rolling/diff features) |
-| POST   | `/predict/lstm`       | LSTM    | Sequence-based prediction (41 cycles recommended) |
+Base URL: `https://nasa-rul-mle-production.up.railway.app`
 
-Interactive docs available at **http://localhost:8000/docs** after starting the server.
+| Method | Endpoint             | Model    | Description                                          |
+|--------|----------------------|----------|------------------------------------------------------|
+| GET    | `/health`            | —        | Liveness check + which models are loaded             |
+| GET    | `/docs`              | —        | Interactive Swagger UI                               |
+| POST   | `/predict/xgb`       | XGBoost  | Single-cycle prediction                              |
+| POST   | `/predict/xgb/batch` | XGBoost  | Multi-cycle prediction (rolling/diff features apply) |
+| POST   | `/predict/lgbm`      | LightGBM | Single-cycle prediction                              |
+| POST   | `/predict/lgbm/batch`| LightGBM | Multi-cycle prediction                               |
+| POST   | `/predict/lstm`      | LSTM     | Sequence-based prediction (41 cycles recommended)    |
 
-**Example request** (`/predict/xgb`):
+### Example: Single-cycle prediction
 
 ```bash
-curl -X POST http://localhost:8000/predict/xgb \
+curl -X POST https://nasa-rul-mle-production.up.railway.app/predict/xgb \
   -H "Content-Type: application/json" \
   -d '{
     "engine_id": 1,
@@ -188,17 +203,15 @@ curl -X POST http://localhost:8000/predict/xgb \
     "setting_1": -0.0007,
     "setting_2": -0.0004,
     "setting_3": 100.0,
-    "sensor_1": 518.67, "sensor_2": 641.82, "sensor_3": 1589.70,
-    "sensor_4": 1400.60, "sensor_5": 14.62, "sensor_6": 21.61,
-    "sensor_7": 554.36, "sensor_8": 2388.02, "sensor_9": 9046.19,
-    "sensor_10": 1.30, "sensor_11": 47.47, "sensor_12": 521.66,
-    "sensor_13": 2388.02, "sensor_14": 8138.62, "sensor_15": 8.4195,
-    "sensor_16": 0.03, "sensor_17": 392.0, "sensor_18": 2388.0,
-    "sensor_19": 100.0, "sensor_20": 39.06, "sensor_21": 23.419
+    "sensor_1": 518.67,  "sensor_2": 641.82,  "sensor_3": 1589.70,
+    "sensor_4": 1400.60, "sensor_5": 14.62,   "sensor_6": 21.61,
+    "sensor_7": 554.36,  "sensor_8": 2388.02, "sensor_9": 9046.19,
+    "sensor_10": 1.30,   "sensor_11": 47.47,  "sensor_12": 521.66,
+    "sensor_13": 2388.02,"sensor_14": 8138.62,"sensor_15": 8.4195,
+    "sensor_16": 0.03,   "sensor_17": 392.0,  "sensor_18": 2388.0,
+    "sensor_19": 100.0,  "sensor_20": 39.06,  "sensor_21": 23.419
   }'
 ```
-
-**Example response:**
 
 ```json
 {
@@ -209,6 +222,22 @@ curl -X POST http://localhost:8000/predict/xgb \
 }
 ```
 
+### Example: Batch prediction with history
+
+```bash
+curl -X POST https://nasa-rul-mle-production.up.railway.app/predict/lgbm/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "readings": [
+      { "engine_id": 1, "cycle": 48, "setting_1": -0.0007, ... },
+      { "engine_id": 1, "cycle": 49, "setting_1": -0.0007, ... },
+      { "engine_id": 1, "cycle": 50, "setting_1": -0.0007, ... }
+    ]
+  }'
+```
+
+Send readings **oldest → newest**. The API predicts RUL for the last reading in the list, using earlier cycles to compute rolling and difference features. At least 5 cycles recommended; the pipeline zero-pads if fewer are sent.
+
 ---
 
 ## Project Structure
@@ -216,288 +245,232 @@ curl -X POST http://localhost:8000/predict/xgb \
 ```
 nasa-rul-mle/
 │
-├── main.py                          # Uvicorn entry point
-├── pyproject.toml                   # Dependencies and tool config
+├── main.py                              # Uvicorn entry point (sets OpenMP env vars)
+├── app.py                               # Streamlit dashboard
+├── pyproject.toml                       # Dependencies + tool config (single source of truth)
+├── uv.lock                              # Locked dependency versions
+├── Dockerfile                           # Container for Railway deployment
+├── docker-compose.yml
 │
 ├── data/
-│   ├── raw/                         # train_FD001.txt, test_FD001.txt, RUL_FD001.txt
-│   └── processed/                   # Cleaned and feature-engineered CSVs
+│   ├── raw/                             # train_FD001.txt, test_FD001.txt, RUL_FD001.txt
+│   └── processed/                       # Cleaned and feature-engineered CSVs
 │
 ├── models/
-│   ├── best_xgb.pkl                 # Trained XGBoost model
-│   ├── best_lstm.pt                 # Trained LSTM weights
-│   ├── best_params_xgb.json         # Best XGBoost hyperparameters
-│   ├── lstm_config.json             # LSTM architecture config
-│   ├── preprocess_scaler.pkl        # Scaler from preprocessing step
-│   ├── feature_scaler.pkl           # Scaler from feature engineering step
-│   └── feature_cols.txt             # Ordered feature list for inference
+│   ├── best_xgb.pkl                     # Trained XGBoost model
+│   ├── best_lgbm.pkl                    # Trained LightGBM model
+│   ├── best_lstm.pt                     # Trained LSTM weights
+│   ├── best_params_xgb.json             # Best XGBoost hyperparameters
+│   ├── best_params_lgbm.json            # Best LightGBM hyperparameters
+│   ├── lstm_config.json                 # LSTM architecture + seq_len
+│   ├── preprocess_scaler.pkl            # StandardScaler from preprocessing
+│   ├── feature_scaler.pkl               # StandardScaler from feature engineering
+│   └── feature_cols.txt                 # Ordered feature list for inference
 │
 ├── notebooks/
-│   ├── 00_load.ipynb
-│   ├── 01_eda_cleaning.ipynb
-│   ├── 02_feature_engineering.ipynb
-│   ├── 03_baseline_model.ipynb
+│   ├── 00_load.ipynb                    # Load raw data, compute RUL labels
+│   ├── 01_eda_cleaning.ipynb            # EDA, sensor analysis
+│   ├── 02_feature_engineering.ipynb     # Feature selection and engineering
+│   ├── 03_baseline_model.ipynb          # Baseline model comparison
 │   ├── 04_tuning_xgb_optuna_mlflow.ipynb
 │   └── 05_model_lstm.ipynb
 │
 ├── src/
 │   ├── data/
-│   │   ├── load.py                  # Load raw data and compute RUL labels
-│   │   └── preprocess.py            # Drop sensors, normalize
+│   │   ├── load.py                      # Load raw data, compute RUL labels
+│   │   └── preprocess.py               # Drop sensors, normalise
 │   │
 │   ├── features/
-│   │   ├── build_feature.py         # Feature selection and engineering
-│   │   └── sequence_builder.py      # LSTM sequence construction
+│   │   ├── build_feature.py             # Feature selection + rolling/diff engineering
+│   │   └── sequence_builder.py          # LSTM sequence construction
 │   │
 │   ├── training/
-│   │   ├── train_baseline.py        # Baseline model comparison
-│   │   ├── tune_xgb_optuna_mlflow.py
-│   │   └── train_lstm_optuna_mlflow.py
+│   │   ├── train_baseline.py            # Baseline comparison
+│   │   ├── tune_xgb_optuna_mlflow.py    # XGBoost tuning pipeline
+│   │   ├── tune_lgbm_optuna_mlflow.py   # LightGBM tuning pipeline
+│   │   └── train_lstm_optuna_mlflow.py  # LSTM tuning pipeline
 │   │
 │   ├── inference/
-│   │   ├── schemas.py               # Pydantic request/response models
-│   │   ├── pipeline.py              # Feature transformation at inference
-│   │   └── predict.py               # Model loader and prediction functions
+│   │   ├── schemas.py                   # Pydantic request/response models
+│   │   ├── pipeline.py                  # Feature transformation at inference time
+│   │   └── predict.py                   # Model registry + prediction methods
 │   │
 │   └── api/
-│       └── app.py                   # FastAPI routes
+│       └── app.py                       # FastAPI routes + lifespan
 │
 ├── scripts/
-│   └── export_artifacts.py          # Export scalers after training
+│   └── export_artifacts.py              # Export scalers + feature list after training
 │
-├── mlruns/                          # MLflow experiment tracking
-└── tests/                           # (coming soon)
+├── tests/
+│   ├── conftest.py
+│   ├── test_inference.py                # Pipeline transforms + API endpoint tests
+│   └── ...
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                       # GitHub Actions CI
+│
+└── mlruns/                              # MLflow experiment tracking (local)
 ```
 
 ---
 
 ## Setup & Installation
 
-**Prerequisites:** Python 3.13, the NASA FD001 dataset files.
+**Prerequisites:** Python 3.13, [uv](https://docs.astral.sh/uv/)
 
 ```bash
-# 1. Clone the repository
+# 1. Clone
 git clone https://github.com/Arrofi07/nasa-rul-mle.git
 cd nasa-rul-mle
 
-# 2. Install dependencies
-pip install -e ".[dev]"
+# 2. Install all dependencies (runtime + dev)
+uv sync --extra dev
 
-# 3. Place the raw dataset files in data/raw/
-#    train_FD001.txt  test_FD001.txt  RUL_FD001.txt
+# 3. Place raw dataset files in data/raw/
+#    train_FD001.txt   test_FD001.txt   RUL_FD001.txt
+#    Available from: https://www.nasa.gov/pcoe-data-set-repository
 ```
-
-> The dataset is available from the [NASA Prognostics Data Repository](https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/).
 
 ---
 
 ## Common Commands
 
-### Testing
-```bash
-# Run all tests
-PYTHONPATH=. pytest tests/ -v
-
-# With coverage:
-PYTHONPATH=. pytest tests/ -v --cov=src --cov-report=term-missing
-
-# Run specific test modules  
-PYTHONPATH=. pytest tests/conftest.py
-PYTHONPATH=. pytest tests/test_data_quality.py
-PYTHONPATH=. pytest tests/test_features.py
-PYTHONPATH=. pytest tests/test_training.py
-PYTHONPATH=. pytest tests/test_inference.py
-
-### Data Pipeline
+### Run the full data + training pipeline
 
 ```bash
-python -m src.data.load
-python -m src.data.preprocess
-python -m src.features.build_feature
-```
+# Data pipeline
+uv run python -m src.data.load
+uv run python -m src.data.preprocess
+uv run python -m src.features.build_feature
 
-### Training
-
-```bash
 # Baseline comparison
-python -m src.training.train_baseline
+uv run python -m src.training.train_baseline
 
-# XGBoost tuning (tracked in MLflow)
-python -m src.training.tune_xgb_optuna_mlflow
+# Hyperparameter tuning (each tracked in MLflow)
+uv run python -m src.training.tune_xgb_optuna_mlflow
+uv run python -m src.training.tune_lgbm_optuna_mlflow
+uv run python -m src.training.train_lstm_optuna_mlflow
 
-# LSTM tuning (tracked in MLflow)
-python -m src.training.train_lstm_optuna_mlflow
-
-# LGBM tuning (tracked in MLflow)
-python -m src.training.tune_lgbm_optuna_mlflow
+# Export scalers + feature list for inference
+uv run python -m scripts.export_artifacts
 ```
 
-### Export Artifacts (run once after training)
+### Start the API + dashboard locally
 
 ```bash
-python -m scripts.export_artifacts
-```
-
-### Start the API
-
-```bash
-# Development (auto-reload)
+# Terminal 1 — API
 python main.py
+# → http://localhost:8000
+# → http://localhost:8000/docs
 
-# Or directly
-uvicorn src.api.app:app --reload --port 8000
-```
-
-### Start Dashboard
-# Terminal 1 — keep this running
-python main.py
-
-# Terminal 2
+# Terminal 2 — Dashboard
 streamlit run app.py
-# Opens: http://localhost:8501
+# → http://localhost:8501
+```
+
+### Testing
+
+```bash
+# All tests
+uv run pytest tests/ -v
+
+# With coverage
+uv run pytest tests/ -v --cov=src --cov-report=term-missing
+
+# Specific test file
+uv run pytest tests/test_inference.py -v
+```
 
 ### Docker
-```bash
-# Build API container
-docker build -t nasa-rul-api .
 
-# Run API container
+```bash
+# Build and run
+docker build -t nasa-rul-api .
 docker run -p 8000:8000 nasa-rul-api
 
-# Test
-curl http://localhost:8000/health
-
-# Docker compose
+# Or with Compose
 docker compose up -d
+
+# Verify
+curl http://localhost:8000/health
 ```
 
 ### MLflow UI
 
 ```bash
 mlflow ui
-# Open: http://localhost:5000
+# → http://localhost:5000
 ```
-
-### Deploy to Railway
-```bash
-git add .
-git commit -m "Fix LightGBM"
-git push origin main
-
-# Deployed with Railway at root https://nasa-rul-mle-production.up.railway.app
-# Health https://nasa-rul-mle-production.up.railway.app/health 
-# Swagger UI https://nasa-rul-mle-production.up.railway.app/docs 
-```
-
-### Deploy App with Streamlit
-```
-# Dashboard
-https://nasa-rul-dashboard.streamlit.app
-```
-
-# NASA Turbofan RUL Prediction
-
-![CI](https://github.com/Arrofi07/NASA-RUL-MLE/actions/workflows/ci.yml/badge.svg)
 
 ---
 
-# CI/CD Pipeline
+## CI/CD
 
-This project follows a Continuous Integration and Continuous Deployment (CI/CD) workflow to ensure code quality and reliable production deployments.
-
-## Continuous Integration (GitHub Actions)
-
-Every push and pull request automatically triggers a CI pipeline that performs:
-
-* Dependency installation using **uv**
-* Code quality checks (Ruff/Black, if configured)
-* Automated unit and integration tests using **pytest**
-* Docker image build verification
-
-If any step fails, the workflow stops and the changes are not considered production-ready.
+Every push to `main` or `develop` triggers a GitHub Actions pipeline:
 
 ```
-Developer
-      │
-      ▼
 git push
-      │
-      ▼
+    │
+    ▼
 GitHub Actions
-      ├── Install dependencies
-      ├── Run tests
-      ├── Verify Docker build
-      └── Report status
+    ├── Setup Python 3.13 + uv
+    ├── uv sync --frozen --extra dev   (installs from uv.lock exactly)
+    ├── ruff check .                   (linting)
+    └── pytest -v                      (110 tests)
+```
+
+The `--frozen` flag fails CI if `pyproject.toml` and `uv.lock` are out of sync — catching the case where a dependency is added locally but the lock file isn't committed.
+
+---
+
+## Deployment
+
+### Railway (API)
+
+The repository is connected to Railway via GitHub Integration. Every push to `main` triggers an automatic deployment:
+
+```
+git push origin main
+    │
+    ▼
+Railway detects commit
+    │
+    ▼
+Docker build (from Dockerfile)
+    │
+    ▼
+Container deployed + health check
+    │
+    ▼
+https://nasa-rul-mle-production.up.railway.app
+```
+
+### Streamlit Cloud (Dashboard)
+
+The dashboard is deployed at [nasa-rul-dashboard.streamlit.app](https://nasa-rul-dashboard.streamlit.app) and connects to the Railway API automatically. It redeploys on every push to `main`.
+
+To run locally against the live Railway API:
+
+```bash
+API_URL=https://nasa-rul-mle-production.up.railway.app streamlit run app.py
 ```
 
 ---
 
-## Continuous Deployment (Railway)
-
-The repository is connected directly to Railway through GitHub Integration.
-
-Whenever new changes are pushed to the deployment branch:
-
-1. Railway automatically detects the new commit.
-2. A new Docker image is built.
-3. The application is deployed.
-4. Railway performs health checks to ensure the service is running correctly.
-
-```
-GitHub Repository
-        │
-        ▼
-Railway
-        │
-        ▼
-Docker Build
-        │
-        ▼
-Deployment
-        │
-        ▼
-Health Check
-        │
-        ▼
-Production
-```
-
----
-
-## Production Architecture
-
-```
-                 User
-                    │
-                    ▼
-          Streamlit Dashboard
-                    │
-             REST API Request
-                    │
-                    ▼
-        FastAPI Prediction Service
-                    │
-        ┌───────────┴───────────┐
-        │                       │
-        ▼                       ▼
-    XGBoost Model          LSTM Model
-                    │
-                    ▼
-           Remaining Useful Life
-               (RUL Prediction)
-```
-
-This architecture separates the frontend from the inference service, making the system modular, scalable, and easier to maintain.
-
-
-## Development Roadmap
+## Roadmap
 
 - [x] Data loading and preprocessing pipeline
-- [x] Feature engineering (rolling, diff, selection)
-- [x] Baseline model comparison
+- [x] Exploratory data analysis notebooks
+- [x] Feature engineering (correlation selection, rolling, diff)
+- [x] Baseline model comparison (Linear, Ridge, RF, XGBoost)
 - [x] XGBoost tuning with Optuna + MLflow
+- [x] LightGBM tuning with Optuna + MLflow
 - [x] LSTM training with Optuna + MLflow
-- [x] FastAPI inference API
-- [x] Unit and integration tests
-- [x] Dockerfile and container deployment
+- [x] Inference pipeline (scaler + feature reproducibility at serve time)
+- [x] FastAPI REST API with Pydantic validation
+- [x] Unit and integration tests (110 tests)
+- [x] Dockerfile + Docker Compose
 - [x] CI/CD with GitHub Actions
+- [x] Production deployment on Railway
+- [x] Streamlit dashboard on Streamlit Cloud
