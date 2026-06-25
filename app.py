@@ -539,7 +539,8 @@ with tab3:
 # ===========================================================================
 # TAB 4 — Model Comparison
 # ===========================================================================
-# This tab answers one question: "when should I trust XGBoost or LightGBM over LSTM (or vice versa)?"
+# This tab answers one question: 
+# "when should I trust XGBoost or LightGBM over LSTM (or vice versa)?"
 # It does this in three steps:
 #   1. Load the batch results that were already computed in Batch Evaluation (or
 #      offer to run them now if the user hasn't yet).
@@ -688,14 +689,20 @@ with tab4:
                 rmse  = float(np.sqrt((err ** 2).mean()))
                 mae   = float(err.abs().mean())
                 r2    = float(
-                    1 - ((err ** 2).sum() / ((valid["true_rul"] - valid["true_rul"].mean()) ** 2).sum())
+                    1 - (
+                        (err ** 2).sum() / 
+                        ((valid["true_rul"] - valid["true_rul"].mean()) ** 2).sum()
+                        )
                 )
                 with col:
                     st.markdown(
                         f"<div style='text-align:center; padding:12px; border-radius:8px; "
-                        f"background:{MODEL_COLORS[model]}22; border:1px solid {MODEL_COLORS[model]}'>"
+                        f"background:{MODEL_COLORS[model]}22"
+                        f"border:1px solid {MODEL_COLORS[model]}'>"
                         f"<b style='color:{MODEL_COLORS[model]}'>{model}</b><br>"
-                        f"RMSE <b>{rmse:.2f}</b> &nbsp;|&nbsp; MAE <b>{mae:.2f}</b> &nbsp;|&nbsp; R² <b>{r2:.3f}</b>"
+                        f"RMSE <b>{rmse:.2f}</b> &nbsp;|&nbsp"
+                        f"MAE <b>{mae:.2f}</b> &nbsp;|&nbsp"
+                        f"R² <b>{r2:.3f}</b>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -763,7 +770,9 @@ with tab4:
             # This format is easiest to plot with plotly express bar charts.
             stage_rows = []
             for _, row in df.iterrows():
-                for model, col in [("XGBoost", "xgb_err"), ("LightGBM", "lgbm_err"), ("LSTM", "lstm_err")]:
+                for model, col in [("XGBoost", "xgb_err"), 
+                                   ("LightGBM", "lgbm_err"), 
+                                   ("LSTM", "lstm_err")]:
                     if pd.notna(row[col]):
                         stage_rows.append({
                             "rul_stage": row["rul_stage"],
@@ -849,7 +858,9 @@ with tab4:
 
             length_rows = []
             for _, row in df.iterrows():
-                for model, col in [("XGBoost", "xgb_err"), ("LightGBM", "lgbm_err"), ("LSTM", "lstm_err")]:
+                for model, col in [("XGBoost", "xgb_err"), 
+                                   ("LightGBM", "lgbm_err"), 
+                                   ("LSTM", "lstm_err")]:
                     if pd.notna(row[col]):
                         length_rows.append({
                             "lifetime_group": row["lifetime_group"],
@@ -866,7 +877,9 @@ with tab4:
                 .rename(columns={"abs_error": "Mean Absolute Error"})
             )
 
-            length_order = ["Short (< 175 cycles)", "Medium (175–249 cycles)", "Long (≥ 250 cycles)"]
+            length_order = ["Short (< 175 cycles)", 
+                            "Medium (175–249 cycles)", 
+                            "Long (≥ 250 cycles)"]
             length_summary["lifetime_group"] = pd.Categorical(
                 length_summary["lifetime_group"], categories=length_order, ordered=True
             )
@@ -957,9 +970,15 @@ with tab4:
 
             h2h_col1, h2h_col2 = st.columns(2)
             with h2h_col1:
-                model_a = st.selectbox("Model A (X axis)", ["XGBoost", "LightGBM", "LSTM"], index=0, key="h2h_a")
+                model_a = st.selectbox("Model A (X axis)", 
+                                       ["XGBoost", "LightGBM", "LSTM"], 
+                                       index=0, 
+                                       key="h2h_a")
             with h2h_col2:
-                model_b = st.selectbox("Model B (Y axis)", ["XGBoost", "LightGBM", "LSTM"], index=2, key="h2h_b")
+                model_b = st.selectbox("Model B (Y axis)", 
+                                       ["XGBoost", "LightGBM", "LSTM"], 
+                                       index=2, 
+                                       key="h2h_b")
 
             # Map model names to their error columns
             err_col_map = {
@@ -975,7 +994,9 @@ with tab4:
 
             # Label each point: which model won for that engine?
             h2h_df["winner"] = h2h_df.apply(
-                lambda r: model_a if r[a_col] < r[b_col] else (model_b if r[b_col] < r[a_col] else "Tie"),
+                lambda r: model_a 
+                if r[a_col] < r[b_col] 
+                else (model_b if r[b_col] < r[a_col] else "Tie"),
                 axis=1,
             )
 
