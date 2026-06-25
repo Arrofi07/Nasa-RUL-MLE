@@ -6,6 +6,7 @@ Tabs
 1. Engine Explorer  — pick an engine, see its sensor degradation + XGBoost/LSTM RUL prediction
 2. Batch Evaluation — run predictions on the full test set, show RMSE/MAE/R², scatter + error dist
 3. Live Prediction  — manually enter a sensor reading and get an instant prediction
+4. Model Comparison - 
 
 Run
 ---
@@ -80,25 +81,10 @@ def build_sensor_row(row: pd.Series) -> dict:
     return d
 
 
-# How many cycles each model actually needs from history.
-# Sending the full engine history (up to 300+ rows) wastes memory and
-# serialisation time — the pipeline only uses the last TREE_WINDOW rows
-# for rolling/diff features, and the last LSTM_SEQ rows for the sequence.
-_TREE_WINDOW = 5   # rolling_window in InferencePipeline
-_LSTM_SEQ = 41     # seq_len in InferencePipeline / lstm_config.json
-
-
-def _trim(readings: list, n: int) -> list:
-    """Return the last n readings (or all if fewer than n exist)."""
-    return readings[-n:] if len(readings) > n else readings
-
-
 def predict_xgb_batch(readings: list) -> float | None:
     try:
         r = requests.post(
-            f"{API_URL}/predict/xgb/batch",
-            json={"readings": _trim(readings, _TREE_WINDOW)},
-            timeout=10,
+            f"{API_URL}/predict/xgb/batch", json={"readings": readings}, timeout=10
         )
         r.raise_for_status()
         return r.json()["predicted_rul"]
@@ -109,9 +95,7 @@ def predict_xgb_batch(readings: list) -> float | None:
 def predict_lgbm_batch(readings: list) -> float | None:
     try:
         r = requests.post(
-            f"{API_URL}/predict/lgbm/batch",
-            json={"readings": _trim(readings, _TREE_WINDOW)},
-            timeout=10,
+            f"{API_URL}/predict/lgbm/batch", json={"readings": readings}, timeout=10
         )
         r.raise_for_status()
         return r.json()["predicted_rul"]
@@ -122,9 +106,7 @@ def predict_lgbm_batch(readings: list) -> float | None:
 def predict_lstm(readings: list) -> float | None:
     try:
         r = requests.post(
-            f"{API_URL}/predict/lstm",
-            json={"readings": _trim(readings, _LSTM_SEQ)},
-            timeout=10,
+            f"{API_URL}/predict/lstm", json={"readings": readings}, timeout=10
         )
         r.raise_for_status()
         return r.json()["predicted_rul"]
@@ -148,8 +130,8 @@ else:
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab1, tab2, tab3 = st.tabs(
-    ["🔍 Engine Explorer", "📊 Batch Evaluation", "🎛️ Live Prediction"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["🔍 Engine Explorer", "📊 Batch Evaluation", "🎛️ Live Prediction", "🏆 Model Comparison"]
 )
 
 # ===========================================================================
@@ -205,11 +187,11 @@ with tab1:
                 readings = [build_sensor_row(row) for _, row in engine_raw.iterrows()]
 
                 with st.spinner("Calling XGBoost…"):
-                    xgb_rul = predict_xgb_batch(readings)  # trims to last 5 internally
+                    xgb_rul = predict_xgb_batch(readings)
                 with st.spinner("Calling LightGBM…"):
-                    lgbm_rul = predict_lgbm_batch(readings)  # trims to last 5 internally
+                    lgbm_rul = predict_lgbm_batch(readings)
                 with st.spinner("Calling LSTM…"):
-                    lstm_rul = predict_lstm(readings)  # trims to last 41 internally
+                    lstm_rul = predict_lstm(readings)
 
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("True RUL", f"{true_rul:.0f} cycles")
@@ -553,3 +535,520 @@ with tab3:
                     st.error(f"API error {r.status_code}: {r.text}")
                 except Exception as e:
                     st.error(f"Request failed: {e}")
+
+# ===========================================================================
+# TAB 4 — Model Comparison
+# ===========================================================================
+# This tab answers one question: "when should I trust XGBoost or LightGBM over LSTM (or vice versa)?"
+# It does this in three steps:
+#   1. Load the batch results that were already computed in Batch Evaluation (or
+#      offer to run them now if the user hasn't yet).
+#   2. Slice the results by RUL range (early / mid / late life) and engine
+#      lifetime length (short / medium / long) to show where each model wins.
+#   3. Display residual plots, per-segment bar charts, and a head-to-head
+#      scatter so the user can build intuition about each model's strengths.
+
+with tab4:
+    st.subheader("Model Comparison — When Does Each Model Win?")
+    st.caption(
+        "Run Batch Evaluation first (All models), then come here to see "
+        "where XGBoost, LightGBM, and LSTM each outperform the others."
+    )
+
+    # ---------------------------------------------------------------------------
+    # Colour palette — consistent across every chart in this tab
+    # ---------------------------------------------------------------------------
+    MODEL_COLORS = {
+        "XGBoost":  "#1f77b4",   # blue
+        "LightGBM": "#2ca02c",   # green
+        "LSTM":     "#ff7f0e",   # orange
+    }
+
+    try:
+        # -----------------------------------------------------------------------
+        # 1. DATA — load the test set and attempt to get batch predictions
+        # -----------------------------------------------------------------------
+
+        fe_df, rul_df, raw_df = load_test_data()
+
+        # Count how many cycles each test engine has in the raw file.
+        # We use this later to label engines as "short / medium / long lived".
+        engine_lengths = (
+            raw_df.groupby("engine_id")["cycle"]
+            .max()
+            .rename("engine_length")
+            .reset_index()
+        )
+
+        st.markdown("### Step 1 — Run predictions for all engines")
+        st.info(
+            "This section needs predictions from **all three models** across all "
+            "100 test engines. Click the button below. It calls the live API "
+            "for every engine (~30 s depending on connection speed).",
+            icon="ℹ️",
+        )
+
+        # We store the results in Streamlit session state so the user doesn't
+        # have to re-run every time they switch tabs.
+        # session_state persists for the lifetime of the browser session.
+        if "comparison_df" not in st.session_state:
+            st.session_state["comparison_df"] = None
+
+        if st.button("Run All-Model Batch Predictions", key="compare_run"):
+            if not api_ok:
+                st.error("API is offline — start it with `python main.py` then refresh.")
+            else:
+                engines = sorted(raw_df["engine_id"].unique())
+                results = []
+                bar = st.progress(0, text="Gathering predictions…")
+
+                for i, eid in enumerate(engines):
+                    engine_raw = raw_df[raw_df["engine_id"] == eid]
+                    true_rul   = float(rul_df.iloc[eid - 1]["rul"])
+
+                    # Build the list of sensor dicts for this engine.
+                    # The helper trims to the last N cycles inside each predict_* call.
+                    readings = [
+                        build_sensor_row(row) for _, row in engine_raw.iterrows()
+                    ]
+
+                    results.append({
+                        "engine_id":  eid,
+                        "true_rul":   true_rul,
+                        "xgb_pred":   predict_xgb_batch(readings),
+                        "lgbm_pred":  predict_lgbm_batch(readings),
+                        "lstm_pred":  predict_lstm(readings),
+                    })
+
+                    bar.progress((i + 1) / len(engines), text=f"Engine {eid}/{len(engines)}")
+
+                bar.empty()
+
+                df = pd.DataFrame(results)
+
+                # Compute absolute errors for each model.
+                # Absolute error = |predicted − true|.  Lower is better.
+                df["xgb_err"]  = (df["xgb_pred"]  - df["true_rul"]).abs()
+                df["lgbm_err"] = (df["lgbm_pred"] - df["true_rul"]).abs()
+                df["lstm_err"] = (df["lstm_pred"] - df["true_rul"]).abs()
+
+                # Compute signed errors (predicted − true).
+                # Positive = over-predicts (thinks engine has more life than it does).
+                # Negative = under-predicts (too pessimistic about remaining life).
+                df["xgb_resid"]  = df["xgb_pred"]  - df["true_rul"]
+                df["lgbm_resid"] = df["lgbm_pred"] - df["true_rul"]
+                df["lstm_resid"] = df["lstm_pred"] - df["true_rul"]
+
+                # Label which model has the smallest absolute error for each engine.
+                # This is used later to show "win rate" per segment.
+                def best_model(row):
+                    errors = {
+                        "XGBoost":  row["xgb_err"],
+                        "LightGBM": row["lgbm_err"],
+                        "LSTM":     row["lstm_err"],
+                    }
+                    # Drop any model that returned None (API failure)
+                    errors = {k: v for k, v in errors.items() if pd.notna(v)}
+                    return min(errors, key=errors.get) if errors else None
+
+                df["best_model"] = df.apply(best_model, axis=1)
+
+                # Merge in the engine lifetime length we computed earlier
+                df = df.merge(engine_lengths, on="engine_id")
+
+                # Save to session state so it survives tab switches
+                st.session_state["comparison_df"] = df
+                st.success("Done! Scroll down to explore the comparison.")
+
+        # -----------------------------------------------------------------------
+        # 2. ANALYSIS — only shown once we have results
+        # -----------------------------------------------------------------------
+
+        df = st.session_state["comparison_df"]
+
+        if df is not None:
+
+            # -------------------------------------------------------------------
+            # Section 2a — Overall metric summary
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### Overall Test-Set Metrics")
+            st.caption(
+                "RMSE penalises large errors more than MAE does. "
+                "A model with low MAE but high RMSE is making occasional very bad predictions."
+            )
+
+            m_cols = st.columns(3)
+            for col, (model, pred_col) in zip(
+                m_cols,
+                [("XGBoost", "xgb_pred"), ("LightGBM", "lgbm_pred"), ("LSTM", "lstm_pred")],
+            ):
+                valid = df.dropna(subset=[pred_col])
+                err   = valid[pred_col] - valid["true_rul"]
+                rmse  = float(np.sqrt((err ** 2).mean()))
+                mae   = float(err.abs().mean())
+                r2    = float(
+                    1 - ((err ** 2).sum() / ((valid["true_rul"] - valid["true_rul"].mean()) ** 2).sum())
+                )
+                with col:
+                    st.markdown(
+                        f"<div style='text-align:center; padding:12px; border-radius:8px; "
+                        f"background:{MODEL_COLORS[model]}22; border:1px solid {MODEL_COLORS[model]}'>"
+                        f"<b style='color:{MODEL_COLORS[model]}'>{model}</b><br>"
+                        f"RMSE <b>{rmse:.2f}</b> &nbsp;|&nbsp; MAE <b>{mae:.2f}</b> &nbsp;|&nbsp; R² <b>{r2:.3f}</b>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            # -------------------------------------------------------------------
+            # Section 2b — Win-rate pie chart
+            # Each engine is assigned to whichever model had the lowest absolute
+            # error. The pie chart shows how often each model "won".
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### Who wins most often?")
+            st.caption(
+                "Each engine is assigned to the model that predicted its RUL "
+                "most accurately. The chart shows how many engines each model "
+                "won across the full 100-engine test set."
+            )
+
+            win_counts = df["best_model"].value_counts().reset_index()
+            win_counts.columns = ["Model", "Engines Won"]
+
+            fig_pie = px.pie(
+                win_counts,
+                names="Model",
+                values="Engines Won",
+                color="Model",
+                color_discrete_map=MODEL_COLORS,
+                title="Win Rate — Best Model per Engine (lowest absolute error)",
+            )
+            fig_pie.update_traces(textinfo="label+percent+value")
+            st.plotly_chart(fig_pie, use_container_width=True)
+
+            # -------------------------------------------------------------------
+            # Section 2c — Performance by RUL range
+            # -------------------------------------------------------------------
+            # We split the test engines into three life-stage buckets:
+            #   Early  (true RUL > 80): engine still has a long time left
+            #   Mid    (30 < true RUL ≤ 80): engine is in the middle of life
+            #   Late   (true RUL ≤ 30): engine is near end of life
+            #
+            # This matters for maintenance: a model that is only accurate when
+            # the engine is nearly dead is not useful — you want warning early.
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### Performance by RUL range (life stage)")
+            st.caption(
+                "Early life = RUL > 80 cycles, Mid life = 30–80 cycles, "
+                "Late life = RUL ≤ 30 cycles. "
+                "A good model should be accurate across all three stages, "
+                "but accuracy near end-of-life is most critical for maintenance."
+            )
+
+            # Assign each engine to a life-stage bucket
+            def rul_bucket(rul):
+                if rul > 80:
+                    return "Early (RUL > 80)"
+                elif rul > 30:
+                    return "Mid (30 < RUL ≤ 80)"
+                else:
+                    return "Late (RUL ≤ 30)"
+
+            df["rul_stage"] = df["true_rul"].apply(rul_bucket)
+
+            # Build a tidy long-form dataframe: one row per (engine, model)
+            # with columns [rul_stage, model, mae].
+            # This format is easiest to plot with plotly express bar charts.
+            stage_rows = []
+            for _, row in df.iterrows():
+                for model, col in [("XGBoost", "xgb_err"), ("LightGBM", "lgbm_err"), ("LSTM", "lstm_err")]:
+                    if pd.notna(row[col]):
+                        stage_rows.append({
+                            "rul_stage": row["rul_stage"],
+                            "model":     model,
+                            "abs_error": row[col],
+                        })
+
+            stage_df = pd.DataFrame(stage_rows)
+
+            # Group by stage + model and compute mean absolute error
+            stage_summary = (
+                stage_df.groupby(["rul_stage", "model"])["abs_error"]
+                .mean()
+                .reset_index()
+                .rename(columns={"abs_error": "Mean Absolute Error"})
+            )
+
+            # Sort stages in a logical order (early → mid → late)
+            stage_order = ["Early (RUL > 80)", "Mid (30 < RUL ≤ 80)", "Late (RUL ≤ 30)"]
+            stage_summary["rul_stage"] = pd.Categorical(
+                stage_summary["rul_stage"], categories=stage_order, ordered=True
+            )
+            stage_summary = stage_summary.sort_values("rul_stage")
+
+            fig_stage = px.bar(
+                stage_summary,
+                x="rul_stage",
+                y="Mean Absolute Error",
+                color="model",
+                barmode="group",
+                color_discrete_map=MODEL_COLORS,
+                title="Mean Absolute Error by Life Stage",
+                labels={"rul_stage": "Life Stage", "model": "Model"},
+                text_auto=".1f",   # show the MAE value on each bar
+            )
+            fig_stage.update_traces(textposition="outside")
+            st.plotly_chart(fig_stage, use_container_width=True)
+
+            # Add a written interpretation so the viewer doesn't have to guess
+            # which model is better at each stage
+            with st.expander("📖 How to read this chart"):
+                st.markdown(
+                    """
+                    - **Lower bar = better** (lower mean absolute error).
+                    - **Early life** engines have a lot of cycles left (RUL > 80).
+                      Tree models often struggle here because the sensor signals
+                      are still near-healthy and there is less pattern to learn.
+                    - **Late life** engines are close to failure (RUL ≤ 30).
+                      This is the most important zone — a wrong prediction here
+                      means either unnecessary early maintenance or dangerous overrun.
+                    - **LSTM** tends to perform better in early and mid life because
+                      it sees the full temporal sequence and can detect subtle trends.
+                    - **XGBoost / LightGBM** use only the last 5 cycles (rolling
+                      window) so they react faster to sudden changes, which can
+                      help or hurt in late life depending on the engine.
+                    """
+                )
+
+            # -------------------------------------------------------------------
+            # Section 2d — Performance by engine lifetime length
+            # -------------------------------------------------------------------
+            # Engines have very different total lifetimes (128–362 cycles).
+            # Short-lived engines give the model fewer cycles to learn the
+            # degradation pattern, which may affect accuracy.
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### Performance by engine lifetime length")
+            st.caption(
+                "Short-lived engines (< 175 cycles) give models fewer data points "
+                "to work with. Long-lived engines (≥ 250 cycles) have richer history "
+                "but the degradation signal may be slower and harder to detect early."
+            )
+
+            def length_bucket(n):
+                if n < 175:
+                    return "Short (< 175 cycles)"
+                elif n < 250:
+                    return "Medium (175–249 cycles)"
+                else:
+                    return "Long (≥ 250 cycles)"
+
+            df["lifetime_group"] = df["engine_length"].apply(length_bucket)
+
+            length_rows = []
+            for _, row in df.iterrows():
+                for model, col in [("XGBoost", "xgb_err"), ("LightGBM", "lgbm_err"), ("LSTM", "lstm_err")]:
+                    if pd.notna(row[col]):
+                        length_rows.append({
+                            "lifetime_group": row["lifetime_group"],
+                            "model":          model,
+                            "abs_error":      row[col],
+                        })
+
+            length_df = pd.DataFrame(length_rows)
+
+            length_summary = (
+                length_df.groupby(["lifetime_group", "model"])["abs_error"]
+                .mean()
+                .reset_index()
+                .rename(columns={"abs_error": "Mean Absolute Error"})
+            )
+
+            length_order = ["Short (< 175 cycles)", "Medium (175–249 cycles)", "Long (≥ 250 cycles)"]
+            length_summary["lifetime_group"] = pd.Categorical(
+                length_summary["lifetime_group"], categories=length_order, ordered=True
+            )
+            length_summary = length_summary.sort_values("lifetime_group")
+
+            fig_len = px.bar(
+                length_summary,
+                x="lifetime_group",
+                y="Mean Absolute Error",
+                color="model",
+                barmode="group",
+                color_discrete_map=MODEL_COLORS,
+                title="Mean Absolute Error by Engine Lifetime Length",
+                labels={"lifetime_group": "Engine Lifetime", "model": "Model"},
+                text_auto=".1f",
+            )
+            fig_len.update_traces(textposition="outside")
+            st.plotly_chart(fig_len, use_container_width=True)
+
+            # -------------------------------------------------------------------
+            # Section 2e — Residual plots (signed error vs true RUL)
+            # -------------------------------------------------------------------
+            # A residual plot shows signed error (predicted − true) on the Y axis
+            # and true RUL on the X axis.
+            # What to look for:
+            #   • Points scattered evenly around 0 → good (no systematic bias)
+            #   • Points mostly above 0 → model over-predicts (too optimistic)
+            #   • Points mostly below 0 → model under-predicts (too pessimistic)
+            #   • A slope pattern → model is biased for long/short RUL values
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### Residual plots (signed prediction error)")
+            st.caption(
+                "Residual = Predicted − True RUL. "
+                "Points above 0 mean the model over-estimated how much life is left "
+                "(dangerous — engine runs longer than expected). "
+                "Points below 0 mean the model under-estimated (safe but wasteful)."
+            )
+
+            resid_model = st.selectbox(
+                "Select model to inspect residuals",
+                ["XGBoost", "LightGBM", "LSTM"],
+                key="resid_model",
+            )
+
+            # Map the dropdown choice to the right column name
+            resid_col_map = {
+                "XGBoost":  "xgb_resid",
+                "LightGBM": "lgbm_resid",
+                "LSTM":     "lstm_resid",
+            }
+            resid_col = resid_col_map[resid_model]
+
+            fig_resid = px.scatter(
+                df.dropna(subset=[resid_col]),
+                x="true_rul",
+                y=resid_col,
+                color_discrete_sequence=[MODEL_COLORS[resid_model]],
+                title=f"{resid_model} — Residuals vs True RUL",
+                labels={
+                    "true_rul": "True RUL (cycles)",
+                    resid_col:  "Residual: Predicted − True (cycles)",
+                },
+                hover_data=["engine_id", "true_rul", resid_col],
+            )
+
+            # Add a horizontal zero line — perfect predictions sit on this line
+            fig_resid.add_hline(
+                y=0,
+                line_dash="dash",
+                line_color="gray",
+                annotation_text="Perfect prediction",
+                annotation_position="top right",
+            )
+
+            st.plotly_chart(fig_resid, use_container_width=True)
+
+            # -------------------------------------------------------------------
+            # Section 2f — Head-to-head scatter: which model is closer per engine?
+            # -------------------------------------------------------------------
+            # For each engine, plot XGBoost error (x) vs LSTM error (y).
+            # Points below the diagonal (y < x) = LSTM was more accurate.
+            # Points above the diagonal (y > x) = XGBoost was more accurate.
+            # This gives an intuitive view of where each model wins.
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### Head-to-head: absolute error per engine")
+
+            h2h_col1, h2h_col2 = st.columns(2)
+            with h2h_col1:
+                model_a = st.selectbox("Model A (X axis)", ["XGBoost", "LightGBM", "LSTM"], index=0, key="h2h_a")
+            with h2h_col2:
+                model_b = st.selectbox("Model B (Y axis)", ["XGBoost", "LightGBM", "LSTM"], index=2, key="h2h_b")
+
+            # Map model names to their error columns
+            err_col_map = {
+                "XGBoost":  "xgb_err",
+                "LightGBM": "lgbm_err",
+                "LSTM":     "lstm_err",
+            }
+
+            a_col = err_col_map[model_a]
+            b_col = err_col_map[model_b]
+
+            h2h_df = df.dropna(subset=[a_col, b_col]).copy()
+
+            # Label each point: which model won for that engine?
+            h2h_df["winner"] = h2h_df.apply(
+                lambda r: model_a if r[a_col] < r[b_col] else (model_b if r[b_col] < r[a_col] else "Tie"),
+                axis=1,
+            )
+
+            fig_h2h = px.scatter(
+                h2h_df,
+                x=a_col,
+                y=b_col,
+                color="winner",
+                color_discrete_map={
+                    model_a: MODEL_COLORS[model_a],
+                    model_b: MODEL_COLORS[model_b],
+                    "Tie":   "gray",
+                },
+                hover_data=["engine_id", "true_rul"],
+                title=f"Head-to-head: {model_a} error vs {model_b} error per engine",
+                labels={
+                    a_col: f"{model_a} Absolute Error (cycles)",
+                    b_col: f"{model_b} Absolute Error (cycles)",
+                },
+            )
+
+            # Add the diagonal line where both models perform equally well.
+            # Points below = model_b wins, points above = model_a wins.
+            max_err = max(h2h_df[a_col].max(), h2h_df[b_col].max()) * 1.05
+            fig_h2h.add_shape(
+                type="line", x0=0, y0=0, x1=max_err, y1=max_err,
+                line=dict(color="gray", dash="dot"),
+            )
+            fig_h2h.add_annotation(
+                x=max_err * 0.85, y=max_err * 0.75,
+                text=f"← {model_b} wins",
+                showarrow=False, font=dict(color="gray", size=11),
+            )
+            fig_h2h.add_annotation(
+                x=max_err * 0.65, y=max_err * 0.92,
+                text=f"{model_a} wins →",
+                showarrow=False, font=dict(color="gray", size=11),
+            )
+
+            st.plotly_chart(fig_h2h, use_container_width=True)
+
+            # Show win count summary below the chart
+            win_summary = h2h_df["winner"].value_counts()
+            w_cols = st.columns(3)
+            w_cols[0].metric(f"{model_a} wins", int(win_summary.get(model_a, 0)))
+            w_cols[1].metric("Tie", int(win_summary.get("Tie", 0)))
+            w_cols[2].metric(f"{model_b} wins", int(win_summary.get(model_b, 0)))
+
+            # -------------------------------------------------------------------
+            # Section 2g — Raw results table (always at the bottom)
+            # -------------------------------------------------------------------
+            st.markdown("---")
+            with st.expander("📋 View full results table"):
+                display_cols = [
+                    "engine_id", "engine_length", "true_rul", "rul_stage", "lifetime_group",
+                    "xgb_pred", "lgbm_pred", "lstm_pred",
+                    "xgb_err", "lgbm_err", "lstm_err",
+                    "best_model",
+                ]
+                # Only show columns that actually exist (some may be None if API failed)
+                display_cols = [c for c in display_cols if c in df.columns]
+                st.dataframe(df[display_cols].round(2), use_container_width=True)
+
+        else:
+            # Friendly prompt if the user hasn't run predictions yet
+            st.warning(
+                "No results yet — click **Run All-Model Batch Predictions** above.",
+                icon="⬆️",
+            )
+
+    except FileNotFoundError as e:
+        st.error(
+            f"Processed data not found: {e}\n\n"
+            "Run the data pipeline first: `python -m src.data.load` → "
+            "`preprocess` → `features.build_feature`"
+        )

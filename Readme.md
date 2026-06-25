@@ -163,6 +163,21 @@ LSTM achieves the best test performance by capturing temporal degradation patter
 }
 ```
 
+**Best LightGBM configuration**(`models/best_params_lgbm.json`)
+
+```json
+{
+    "learning_rate": 0.0497598982744983,
+    "num_leaves": 205,
+    "max_depth": 4,
+    "min_child_samples": 35,
+    "feature_fraction": 0.8460949396176609,
+    "bagging_fraction": 0.7399677958277459,
+    "lambda_l1": 1.2237182584986743e-05,
+    "lambda_l2": 1.62555911245314e-05
+}
+```
+
 **Best LSTM configuration** (`models/lstm_config.json`):
 
 ```json
@@ -467,6 +482,7 @@ API_URL=https://nasa-rul-mle-production.up.railway.app streamlit run app.py
 - [x] XGBoost tuning with Optuna + MLflow
 - [x] LightGBM tuning with Optuna + MLflow
 - [x] LSTM training with Optuna + MLflow
+- [ ] LSTM tuning with Optuna + MLflow
 - [x] Inference pipeline (scaler + feature reproducibility at serve time)
 - [x] FastAPI REST API with Pydantic validation
 - [x] Unit and integration tests (110 tests)
@@ -474,3 +490,4 @@ API_URL=https://nasa-rul-mle-production.up.railway.app streamlit run app.py
 - [x] CI/CD with GitHub Actions
 - [x] Production deployment on Railway
 - [x] Streamlit dashboard on Streamlit Cloud
+- [x] Add a model comparison section to the dashboard
