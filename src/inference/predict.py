@@ -22,35 +22,61 @@ from src.inference.pipeline import InferencePipeline
 # ---------------------------------------------------------------------------
 
 
+class AttentionPooling(nn.Module):
+    """Learns attention weights over time steps and returns a weighted average."""
+    def __init__(self, hidden_size: int):
+        super().__init__()
+        self.score = nn.Linear(hidden_size, 1, bias=False)
+
+    def forward(self, lstm_out: torch.Tensor) -> torch.Tensor:
+        scores  = self.score(lstm_out).squeeze(-1)
+        weights = torch.softmax(scores, dim=-1).unsqueeze(-1)
+        return (lstm_out * weights).sum(dim=1)
+
+
 class LSTMModel(nn.Module):
+    """
+    Must mirror the architecture in train_lstm_optuna_mlflow.py exactly.
+    Loaded from lstm_config.json at startup — bidirectional and use_attention
+    fields were added in v3. Old config files without these keys default to
+    False (backward-compatible with weights trained before v3).
+    """
     def __init__(
         self,
-        input_size: int,
-        hidden_size: int = 64,
-        num_layers: int = 2,
-        dropout: float = 0.2,
+        input_size:    int,
+        hidden_size:   int   = 64,
+        num_layers:    int   = 2,
+        dropout:       float = 0.2,
+        bidirectional: bool  = False,   # new in v3
+        use_attention: bool  = False,   # new in v3
     ):
         super().__init__()
+        self.use_attention = use_attention
         lstm_dropout = dropout if num_layers > 1 else 0.0
         self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=lstm_dropout,
+            input_size    = input_size,
+            hidden_size   = hidden_size,
+            num_layers    = num_layers,
+            batch_first   = True,
+            dropout       = lstm_dropout,
+            bidirectional = bidirectional,
         )
+        # Bidirectional doubles the output size
+        out_dim = hidden_size * (2 if bidirectional else 1)
+        if use_attention:
+            self.attn = AttentionPooling(out_dim)
         self.head = nn.Sequential(
-            nn.LayerNorm(hidden_size),
-            nn.Linear(hidden_size, hidden_size // 2),
+            nn.LayerNorm(out_dim),
+            nn.Linear(out_dim, out_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_size // 2, 1),
+            nn.Linear(out_dim // 2, 1),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out, _ = self.lstm(x)
-        out = out[:, -1, :]
-        return self.head(out).squeeze(-1)
+        pooled = self.attn(out) if self.use_attention else out[:, -1, :]
+        return self.head(pooled).squeeze(-1)
 
 
 # ---------------------------------------------------------------------------
@@ -62,8 +88,8 @@ class ModelRegistry:
     """
     Loads and holds all models + the inference pipeline.
 
-    Call `from_paths()` once at startup; then use `predict_xgb()`,
-    `predict_lgbm()`, and `predict_lstm()` inside route handlers.
+    Call `from_paths()` once at startup; then use `predict_xgb()`
+    and `predict_lstm()` inside route handlers.
     """
 
     def __init__(
@@ -98,19 +124,23 @@ class ModelRegistry:
         """
         Load all artifacts from disk.
 
-        Missing LSTM weights → lstm stays None (tree-model-only mode).
-        Missing XGBoost or LightGBM pickle → raises FileNotFoundError.
+        Missing LSTM weights → lstm stays None (XGBoost-only mode).
+        Missing XGBoost pickle → raises FileNotFoundError immediately.
         """
         # MPS (Apple Silicon GPU) is intentionally skipped — it segfaults at
         # torch.load() time on several macOS + PyTorch 2.x combinations.
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # CPU inference is fast enough for this model size.
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
 
         # --- XGBoost (required) ---
         xgb_path = Path(xgb_path)
         if not xgb_path.exists():
             raise FileNotFoundError(
                 f"XGBoost model not found at {xgb_path}. "
-                "Run: python -m src.training.tune_xgb_optuna_mlflow"
+                "Run the tuning script first: python -m src.training.tune_xgb_optuna_mlflow"
             )
         xgb_model = joblib.load(xgb_path)
 
@@ -119,21 +149,9 @@ class ModelRegistry:
         if not lgbm_path.exists():
             raise FileNotFoundError(
                 f"LightGBM model not found at {lgbm_path}. "
-                "Run: python -m src.training.tune_lgbm_optuna_mlflow"
+                "Run the tuning script first: python -m src.training.tune_lgbm_optuna_mlflow"
             )
         lgbm_model = joblib.load(lgbm_path)
-
-        # Force LightGBM to use 1 thread at predict time.
-        # On macOS, XGBoost and LightGBM each ship their own libomp.dylib.
-        # When both are loaded in the same process and both spin up OpenMP
-        # thread pools the runtimes corrupt each other's thread-state memory,
-        # causing a SIGSEGV in __kmp_suspend_initialize_thread.
-        # Capping LightGBM to n_jobs=1 keeps it single-threaded and avoids
-        # the conflict entirely. For single-row inference this has zero cost.
-        try:
-            lgbm_model.set_params(n_jobs=1)
-        except Exception:
-            pass  # older joblib pickles may not support set_params
 
         # --- LSTM config ---
         with open(lstm_config_path) as f:
@@ -154,15 +172,35 @@ class ModelRegistry:
         if lstm_path.exists():
             n_features = len(pipeline.feature_cols)
             lstm_model = LSTMModel(
-                input_size=n_features,
-                hidden_size=lstm_config["hidden_size"],
-                num_layers=lstm_config["num_layers"],
-                dropout=lstm_config.get("dropout", 0.2),
+                input_size    = n_features,
+                hidden_size   = lstm_config["hidden_size"],
+                num_layers    = lstm_config["num_layers"],
+                dropout       = lstm_config.get("dropout", 0.2),
+                # These fields were added in v3; .get() keeps backward
+                # compatibility with weights trained before the upgrade.
+                bidirectional = lstm_config.get("bidirectional", False),
+                use_attention = lstm_config.get("use_attention", False),
             ).to(device)
             lstm_model.load_state_dict(
                 torch.load(lstm_path, map_location=device, weights_only=True)
             )
             lstm_model.eval()
+
+            # print("=== MODEL FEATURES ===")
+            # print(list(xgb_model.feature_names_in_))
+
+            # print("=== PIPELINE FEATURES ===")
+            # print(pipeline.feature_cols)
+
+            # print(
+            #    "Missing from pipeline:",
+            #    set(xgb_model.feature_names_in_) - set(pipeline.feature_cols)
+            # )
+
+            # print(
+            #    "Extra in pipeline:",
+            #    set(pipeline.feature_cols) - set(xgb_model.feature_names_in_)
+            # )
 
         return cls(xgb_model, lgbm_model, lstm_model, pipeline, lstm_config, device)
 
@@ -191,7 +229,9 @@ class ModelRegistry:
         We recommend sending at least 5 cycles (rolling_window size).
         """
         X = self.pipe.transform_xgb(readings)
+
         pred = float(self.xgb.predict(X)[0])
+        # Clip to [0, 125] — matches the RUL cap used during training
         return max(0.0, min(pred, 125.0))
 
     def predict_lgbm(self, readings: list[dict]) -> float:
@@ -201,12 +241,11 @@ class ModelRegistry:
         The last reading in the list is the prediction point.
         Earlier readings are used only to build rolling / diff features.
         We recommend sending at least 5 cycles (rolling_window size).
-
-        num_threads=1 is passed explicitly to .predict() as a second line of
-        defence against the dual-libomp SIGSEGV on macOS Apple Silicon.
         """
         X = self.pipe.transform_lgbm(readings)
-        pred = float(self.lgbm.predict(X, num_threads=1)[0])
+
+        pred = float(self.lgbm.predict(X)[0])
+        # Clip to [0, 125] — matches the RUL cap used during training
         return max(0.0, min(pred, 125.0))
 
     def predict_lstm(self, readings: list[dict]) -> float:
