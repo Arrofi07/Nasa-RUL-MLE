@@ -1,0 +1,148 @@
+# aws/template.yaml
+# ==================
+# AWS SAM (Serverless Application Model) template.
+#
+# SAM is AWS's infrastructure-as-code framework for serverless applications.
+# It defines your Lambda function, memory, timeout, environment variables,
+# and the Function URL in one declarative YAML file — instead of clicking
+# through the AWS console or writing long CLI commands.
+#
+# Why SAM alongside the deploy script?
+# The deploy script is practical for quick deployments (run one command).
+# The SAM template is professional — it makes the infrastructure auditable,
+# version-controlled, and reproducible. For your portfolio, having a SAM
+# template shows you understand IaC (Infrastructure as Code), which is a
+# real MLOps skill that companies look for.
+#
+# Deploy with SAM CLI (alternative to deploy_aws.sh):
+#   sam build
+#   sam deploy --guided          # first time (saves config to samconfig.toml)
+#   sam deploy                   # subsequent deploys
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  NASA Turbofan RUL Prediction API
+  Serves XGBoost, LightGBM, and LSTM (ONNX) models via FastAPI on AWS Lambda.
+
+# ---------------------------------------------------------------------------
+# Parameters — override at deploy time with --parameter-overrides
+# ---------------------------------------------------------------------------
+Parameters:
+  Environment:
+    Type:    String
+    Default: prod
+    AllowedValues: [dev, prod]
+    Description: Deployment environment tag
+
+  LambdaMemory:
+    Type:    Number
+    Default: 1024
+    Description: >
+      Lambda memory in MB. Also controls CPU allocation (proportional).
+      1024 MB gives ~half a vCPU — enough for XGBoost + LightGBM + ONNX.
+      Increase to 2048 if cold starts are too slow.
+
+  LambdaTimeout:
+    Type:    Number
+    Default: 30
+    Description: >
+      Max seconds per request. 30 s is generous for cold starts.
+      Warm requests typically complete in <500 ms.
+
+# ---------------------------------------------------------------------------
+# Globals — applied to all Lambda functions in this template
+# ---------------------------------------------------------------------------
+Globals:
+  Function:
+    Runtime:      python3.12
+    MemorySize:   !Ref LambdaMemory
+    Timeout:      !Ref LambdaTimeout
+    # Environment variables set before any import — same as main.py
+    Environment:
+      Variables:
+        KMP_DUPLICATE_LIB_OK:  "TRUE"   # prevent dual-libomp crash
+        OMP_NUM_THREADS:       "1"       # single-threaded BLAS on Lambda vCPU
+        MKL_NUM_THREADS:       "1"
+        LGBM_NUM_THREADS:      "1"
+        TOKENIZERS_PARALLELISM: "false"
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # ── Lambda function ───────────────────────────────────────────────────────
+  NasaRulFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      # DockerContext: the build context root (same as `docker build .`)
+      # Dockerfile:    path relative to DockerContext
+      DockerContext: ../../        # project root
+      Dockerfile:    aws/lambda/Dockerfile
+      DockerTag:     latest
+
+    Properties:
+      FunctionName: !Sub "nasa-rul-api-${Environment}"
+      PackageType:  Image           # Container image (not zip deployment)
+      ImageConfig:
+        # Overrides the Dockerfile CMD — useful if you have multiple handlers
+        # in one image. Here we just confirm the handler explicitly.
+        Command:
+          - handler.lambda_handler
+
+      # ── Function URL (free public HTTPS — no API Gateway needed) ──────────
+      # auth-type: NONE → public endpoint, no AWS Signature required
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+            - POST
+          AllowHeaders:
+            - Content-Type
+
+      # ── IAM permissions ───────────────────────────────────────────────────
+      # BasicExecutionRole grants: write logs to CloudWatch
+      # This is the minimum needed for a Lambda function to run.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+      # ── Tags ──────────────────────────────────────────────────────────────
+      Tags:
+        Project:     nasa-rul-mle
+        Environment: !Ref Environment
+        ManagedBy:   SAM
+
+  # ── CloudWatch Log Group ─────────────────────────────────────────────────
+  # Explicitly define the log group so we can set a retention policy.
+  # Without this, Lambda creates a log group with infinite retention —
+  # old logs accumulate and you eventually pay for storage.
+  NasaRulLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:      !Sub "/aws/lambda/nasa-rul-api-${Environment}"
+      RetentionInDays:   14   # keep logs for 2 weeks, then auto-delete
+
+# ---------------------------------------------------------------------------
+# Outputs — printed after `sam deploy` completes
+# ---------------------------------------------------------------------------
+Outputs:
+  FunctionUrl:
+    Description: "Public HTTPS endpoint (Lambda Function URL)"
+    Value:        !GetAtt NasaRulFunctionUrl.FunctionUrl
+
+  HealthUrl:
+    Description: "Health check endpoint"
+    Value:        !Sub "${NasaRulFunctionUrl.FunctionUrl}health"
+
+  SwaggerUrl:
+    Description: "Swagger UI"
+    Value:        !Sub "${NasaRulFunctionUrl.FunctionUrl}docs"
+
+  LambdaArn:
+    Description: "Lambda function ARN"
+    Value:        !GetAtt NasaRulFunction.Arn
