@@ -90,6 +90,7 @@ Raw Sensor Data (NASA FD001)
 │    └── Engine Explorer               │
 │    └── Batch Evaluation              │
 │    └── Live Prediction               │
+│    └── Model Comparison              │
 └──────────────────────────────────────┘
 ```
 

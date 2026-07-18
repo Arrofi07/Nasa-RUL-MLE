@@ -8,6 +8,7 @@ dependencies = [
     "lightgbm==4.6.0",
     "mlflow==3.11.1",
     "numpy==2.4.4",
+    "onnxscript>=0.7.1",
     "pandas==2.3.3",
     "psutil==7.2.2",
     "pyarrow==23.0.1",
