@@ -1,0 +1,28 @@
+# requirements-lambda.txt
+# ========================
+# Lambda-only dependencies — torch is intentionally excluded.
+# onnxruntime replaces torch for LSTM inference.
+# mangum bridges AWS Lambda events to the FastAPI ASGI app.
+#
+# Total unpacked size: ~220 MB (well under Lambda's ~550 MB container limit)
+# Compare with Railway (with torch): ~950 MB
+
+# ── Web framework ──────────────────────────────────────────────────────────
+fastapi==0.115.12
+uvicorn[standard]==0.34.3    # used by Mangum internally for ASGI lifecycle
+pydantic==2.11.4
+mangum==0.19.0               # ASGI adapter: API Gateway events → FastAPI
+
+# ── ML inference ───────────────────────────────────────────────────────────
+xgboost==3.2.0
+lightgbm==4.6.0
+scikit-learn==1.8.0          # needed for the saved StandardScaler pickles
+onnxruntime==1.20.0          # runs best_lstm.onnx — replaces torch (~50 MB vs ~800 MB)
+
+# ── Data ───────────────────────────────────────────────────────────────────
+numpy==2.4.4
+pandas==2.3.3
+joblib                       # loads .pkl model files
+
+# ── Utilities ──────────────────────────────────────────────────────────────
+cloudpickle==3.1.2           # needed by some joblib-serialised sklearn objects
