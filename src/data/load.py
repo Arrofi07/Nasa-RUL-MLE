@@ -120,11 +120,11 @@ def load_and_preprocess_data(
     rul_df.to_csv(outdir / "rul.csv",   index=False)
 
     print(f"✅ Data saved to {outdir}")
-    print(f"   Train : {train_df.shape}  |  
-          RUL range: {train_df['rul'].min():.0f}–{train_df['rul'].max():.0f}")
+    print(f"   Train : {train_df.shape}"
+          f"  |  RUL range: {train_df['rul'].min():.0f}–{train_df['rul'].max():.0f}")
     print(f"   Test  : {test_df.shape}")
-    print(f"   RUL   : {rul_df.shape}    |  
-          True RUL range: {rul_df['rul'].min():.0f}–{rul_df['rul'].max():.0f}")
+    print(f"   RUL   : {rul_df.shape}"
+          f"    |  True RUL range: {rul_df['rul'].min():.0f}–{rul_df['rul'].max():.0f}")
 
     return train_df, test_df, rul_df
 
